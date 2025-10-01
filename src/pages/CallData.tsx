@@ -8,6 +8,7 @@ import { useTenant } from "@/hooks/useTenant";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { getExchangeRates, calculateCallCost, formatCurrency } from "@/lib/currency";
+import { CallDetailModal } from "@/components/CallDetailModal";
 import {
   Table,
   TableBody,
@@ -39,6 +40,8 @@ export default function CallData() {
   const [callData, setCallData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [exchangeRates, setExchangeRates] = useState({});
+  const [selectedCall, setSelectedCall] = useState<any>(null);
+  const [modalOpen, setModalOpen] = useState(false);
   const { client } = useCurrentClient();
   const { profile } = useAuth();
   const { region } = useTenant();
@@ -329,8 +332,7 @@ export default function CallData() {
                   <TableHead>Status</TableHead>
                   <TableHead>Intent</TableHead>
                   <TableHead>Cost</TableHead>
-                  {/* Future: Actions column for transcript viewer, call back, etc. */}
-                  {/* <TableHead>Actions</TableHead> */}
+                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -343,14 +345,19 @@ export default function CallData() {
                     <TableCell>{getStatusBadge(call.status)}</TableCell>
                     <TableCell>{call.intent}</TableCell>
                     <TableCell>{call.cost}</TableCell>
-                    {/* Future: Actions column implementation */}
-                    {/*
                     <TableCell>
-                      <Button variant="ghost" size="sm" title="View transcript">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        title="View call details"
+                        onClick={() => {
+                          setSelectedCall(call);
+                          setModalOpen(true);
+                        }}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
-                    */}
                   </TableRow>
                 ))}
               </TableBody>
@@ -364,6 +371,12 @@ export default function CallData() {
           )}
         </CardContent>
       </Card>
+
+      <CallDetailModal 
+        call={selectedCall}
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+      />
     </div>
   );
 }
