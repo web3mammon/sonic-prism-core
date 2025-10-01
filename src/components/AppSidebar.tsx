@@ -9,10 +9,13 @@ import {
   TestTube,
   Building2,
   Command,
+  TrendingUp,
+  Sparkles,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -53,6 +56,7 @@ export function AppSidebar() {
       { title: "Call Data", url: `${basePath}/call-data`, icon: Database },
       { title: "Audio Files", url: `${basePath}/audio-files`, icon: FileAudio },
       { title: "Analytics", url: `${basePath}/analytics`, icon: BarChart3 },
+      { title: "Advanced Analytics", url: `${basePath}/analytics/advanced`, icon: TrendingUp, badge: "AI" },
       { title: "Logs", url: `${basePath}/logs`, icon: ScrollText },
       { title: "System", url: `${basePath}/system`, icon: Settings },
     ] : [])
@@ -79,7 +83,16 @@ export function AppSidebar() {
                       className={getNavClassName}
                     >
                       <item.icon className="h-4 w-4" />
-                      {!isCollapsed && <span>{item.title}</span>}
+                      {!isCollapsed && (
+                        <span className="flex items-center gap-2">
+                          {item.title}
+                          {item.badge && (
+                            <Badge variant="secondary" className="text-xs px-1.5 py-0.5 bg-primary/20 text-primary">
+                              {item.badge}
+                            </Badge>
+                          )}
+                        </span>
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
