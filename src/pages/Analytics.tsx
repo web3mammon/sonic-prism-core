@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricsCard } from "@/components/dashboard/MetricsCard";
 import {
@@ -11,7 +12,8 @@ import {
   Calendar,
   DollarSign,
   Loader2,
-  Download
+  Download,
+  ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +27,7 @@ import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAnalytics } from "@/hooks/useAnalytics";
 
 export default function Analytics() {
+  const navigate = useNavigate();
   const [dateRange, setDateRange] = useState("7days");
   const { client, loading: clientLoading } = useCurrentClient();
   const { analytics, loading: analyticsLoading, error } = useAnalytics(client?.client_id || null, dateRange);
@@ -95,6 +98,11 @@ export default function Analytics() {
           <Button variant="outline" onClick={() => exportAnalytics()}>
             <Download className="mr-2 h-4 w-4" />
             Export Report
+          </Button>
+          <Button onClick={() => navigate('advanced')}>
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Advanced Analytics
+            <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </div>
       </div>

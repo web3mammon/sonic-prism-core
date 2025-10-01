@@ -64,12 +64,51 @@ export type Database = {
           },
         ]
       }
+      business_insights: {
+        Row: {
+          client_id: string
+          created_at: string | null
+          id: string
+          metric_type: string
+          metric_value: Json
+          period_end: string
+          period_start: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string | null
+          id?: string
+          metric_type: string
+          metric_value: Json
+          period_end: string
+          period_start: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string | null
+          id?: string
+          metric_type?: string
+          metric_value?: Json
+          period_end?: string
+          period_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_business_insights_client"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "voice_ai_clients"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
       call_sessions: {
         Row: {
           business_name: string | null
           call_sid: string
           caller_number: string | null
           client_id: string
+          conversation_stage: string | null
           cost_amount: number | null
           created_at: string
           duration_seconds: number | null
@@ -77,12 +116,16 @@ export type Database = {
           id: string
           intent: Database["public"]["Enums"]["intent"] | null
           metadata: Json | null
+          outcome_type: string | null
+          primary_intent: string | null
           prospect_name: string | null
           recording_url: string | null
+          sentiment_score: number | null
           start_time: string
           status: string
           transcript: Json | null
           transcript_summary: string | null
+          transfer_requested: boolean | null
           updated_at: string
         }
         Insert: {
@@ -90,6 +133,7 @@ export type Database = {
           call_sid: string
           caller_number?: string | null
           client_id: string
+          conversation_stage?: string | null
           cost_amount?: number | null
           created_at?: string
           duration_seconds?: number | null
@@ -97,12 +141,16 @@ export type Database = {
           id?: string
           intent?: Database["public"]["Enums"]["intent"] | null
           metadata?: Json | null
+          outcome_type?: string | null
+          primary_intent?: string | null
           prospect_name?: string | null
           recording_url?: string | null
+          sentiment_score?: number | null
           start_time?: string
           status: string
           transcript?: Json | null
           transcript_summary?: string | null
+          transfer_requested?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -110,6 +158,7 @@ export type Database = {
           call_sid?: string
           caller_number?: string | null
           client_id?: string
+          conversation_stage?: string | null
           cost_amount?: number | null
           created_at?: string
           duration_seconds?: number | null
@@ -117,12 +166,16 @@ export type Database = {
           id?: string
           intent?: Database["public"]["Enums"]["intent"] | null
           metadata?: Json | null
+          outcome_type?: string | null
+          primary_intent?: string | null
           prospect_name?: string | null
           recording_url?: string | null
+          sentiment_score?: number | null
           start_time?: string
           status?: string
           transcript?: Json | null
           transcript_summary?: string | null
+          transfer_requested?: boolean | null
           updated_at?: string
         }
         Relationships: [
@@ -478,6 +531,7 @@ export type Database = {
           business_context: Json | null
           business_hours: Json | null
           business_name: string
+          call_transfer_enabled: boolean | null
           call_transfer_number: string | null
           client_id: string
           client_slug: string | null
@@ -495,6 +549,7 @@ export type Database = {
           system_prompt: string | null
           timezone: string | null
           transfer_context: string | null
+          transfer_threshold: number | null
           tts_config: Json | null
           updated_at: string
           user_id: string
@@ -509,6 +564,7 @@ export type Database = {
           business_context?: Json | null
           business_hours?: Json | null
           business_name: string
+          call_transfer_enabled?: boolean | null
           call_transfer_number?: string | null
           client_id: string
           client_slug?: string | null
@@ -526,6 +582,7 @@ export type Database = {
           system_prompt?: string | null
           timezone?: string | null
           transfer_context?: string | null
+          transfer_threshold?: number | null
           tts_config?: Json | null
           updated_at?: string
           user_id: string
@@ -540,6 +597,7 @@ export type Database = {
           business_context?: Json | null
           business_hours?: Json | null
           business_name?: string
+          call_transfer_enabled?: boolean | null
           call_transfer_number?: string | null
           client_id?: string
           client_slug?: string | null
@@ -557,6 +615,7 @@ export type Database = {
           system_prompt?: string | null
           timezone?: string | null
           transfer_context?: string | null
+          transfer_threshold?: number | null
           tts_config?: Json | null
           updated_at?: string
           user_id?: string

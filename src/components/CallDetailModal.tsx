@@ -20,6 +20,8 @@ import {
   User,
   Calendar
 } from "lucide-react";
+import { SentimentIndicator } from "@/components/analytics/SentimentIndicator";
+import { ConversationFlowVisualization } from "@/components/analytics/ConversationFlowVisualization";
 
 interface CallDetailModalProps {
   call: any;
@@ -124,6 +126,21 @@ export function CallDetailModal({ call, open, onOpenChange }: CallDetailModalPro
                       <p className="text-sm font-medium">Caller Name</p>
                       <p className="text-sm text-muted-foreground">{rawData.prospect_name}</p>
                     </div>
+                  </div>
+                )}
+                {rawData.sentiment_score !== null && (
+                  <div className="flex items-start gap-3">
+                    <div className="h-5 w-5 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Sentiment</p>
+                      <SentimentIndicator score={rawData.sentiment_score} showLabel size="sm" />
+                    </div>
+                  </div>
+                )}
+                {rawData.conversation_stage && (
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium mb-2">Conversation Flow</p>
+                    <ConversationFlowVisualization currentStage={rawData.conversation_stage} />
                   </div>
                 )}
               </CardContent>

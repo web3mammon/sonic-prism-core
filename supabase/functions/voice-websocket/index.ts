@@ -95,6 +95,9 @@ class VoiceSession {
   private streamSid: string | null = null;
   private interimTranscript: string = '';
   private isSpeaking: boolean = false;
+  private sentimentScore: number = 0;
+  private conversationStage: string = 'greeting';
+  private transferRequested: boolean = false;
 
   constructor(client: any, callSid: string, supabase: any, twilioSocket: WebSocket) {
     this.client = client;
@@ -300,6 +303,18 @@ class VoiceSession {
         message_type: 'text',
         content: userInput
       });
+
+    // Analyze sentiment and intent
+    await this.analyzeSentimentAndIntent(userInput);
+
+    // Check if transfer is needed based on sentiment
+    if (this.client.call_transfer_enabled && 
+        this.sentimentScore < (this.client.transfer_threshold || -0.5) && 
+        !this.transferRequested) {
+      console.log(`⚠️ Low sentiment detected (${this.sentimentScore}), initiating transfer...`);
+      await this.initiateCallTransfer();
+      return;
+    }
 
     // Check for audio snippet match first
     const audioSnippet = await this.checkAudioSnippets(userInput);
@@ -530,6 +545,116 @@ class VoiceSession {
     }
   }
 
+  private async analyzeSentimentAndIntent(userInput: string) {
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) return;
+
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a sentiment and intent classifier. Analyze the user message and return ONLY a JSON object with: sentiment (number from -1 to 1), intent (string), and stage (greeting/qualification/booking/closing).'
+            },
+            {
+              role: 'user',
+              content: `Analyze this message from a customer calling ${this.client.business_name}: "${userInput}"`
+            }
+          ],
+          tools: [{
+            type: 'function',
+            function: {
+              name: 'analyze_conversation',
+              description: 'Analyze customer sentiment and intent',
+              parameters: {
+                type: 'object',
+                properties: {
+                  sentiment: {
+                    type: 'number',
+                    description: 'Sentiment score from -1 (very negative) to 1 (very positive)'
+                  },
+                  intent: {
+                    type: 'string',
+                    description: 'Primary intent: appointment_booking, emergency_service, quote_request, general_inquiry, complaint, or transfer_request'
+                  },
+                  stage: {
+                    type: 'string',
+                    description: 'Conversation stage: greeting, qualification, booking, closing'
+                  }
+                },
+                required: ['sentiment', 'intent', 'stage']
+              }
+            }
+          }],
+          tool_choice: { type: 'function', function: { name: 'analyze_conversation' } }
+        })
+      });
+
+      const data = await response.json();
+      const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
+      
+      if (toolCall?.function?.arguments) {
+        const analysis = JSON.parse(toolCall.function.arguments);
+        this.sentimentScore = analysis.sentiment || 0;
+        this.conversationStage = analysis.stage || 'greeting';
+        
+        console.log(`📊 Sentiment: ${this.sentimentScore}, Intent: ${analysis.intent}, Stage: ${this.conversationStage}`);
+        
+        // Update call session with real-time analysis
+        await this.supabase
+          .from('call_sessions')
+          .update({
+            sentiment_score: this.sentimentScore,
+            primary_intent: analysis.intent,
+            conversation_stage: this.conversationStage,
+            metadata: {
+              sentiment_history: [...(this.transcript.map(t => t.role === 'user' ? this.sentimentScore : null).filter(Boolean))]
+            }
+          })
+          .eq('call_sid', this.callSid);
+      }
+    } catch (error) {
+      console.error('❌ Error analyzing sentiment:', error);
+    }
+  }
+
+  private async initiateCallTransfer() {
+    if (!this.client.call_transfer_number) {
+      console.log('⚠️ No transfer number configured');
+      return;
+    }
+
+    this.transferRequested = true;
+    
+    await this.speakText("I understand you're frustrated. Let me connect you with one of our team members who can better assist you.");
+    
+    // Update call session
+    await this.supabase
+      .from('call_sessions')
+      .update({
+        transfer_requested: true,
+        outcome_type: 'transferred_to_agent',
+        metadata: {
+          transfer_reason: 'low_sentiment',
+          sentiment_at_transfer: this.sentimentScore,
+          transfer_context: this.client.transfer_context || 'Customer requested human assistance'
+        }
+      })
+      .eq('call_sid', this.callSid);
+
+    console.log(`📞 Call transfer initiated to ${this.client.call_transfer_number}`);
+    
+    // TODO: Implement Twilio conference/transfer via Twilio API
+    // This would require calling Twilio's REST API to update the call
+  }
+
   private async handleStreamStop() {
     this.isActive = false;
     
@@ -545,6 +670,11 @@ class VoiceSession {
       ? Math.floor((endTime.getTime() - new Date(session.start_time).getTime()) / 1000)
       : 0;
 
+    // Determine outcome type based on conversation
+    const outcomeType = this.transferRequested ? 'transferred_to_agent' :
+                       this.conversationStage === 'booking' ? 'appointment_booked' :
+                       this.conversationStage === 'closing' ? 'completed' : 'no_action';
+
     await this.supabase
       .from('call_sessions')
       .update({
@@ -553,6 +683,7 @@ class VoiceSession {
         end_time: endTime.toISOString(),
         duration_seconds: durationSeconds,
         status: 'completed',
+        outcome_type: outcomeType,
         updated_at: new Date().toISOString()
       })
       .eq('call_sid', this.callSid);

@@ -18,6 +18,7 @@ import Testing from "./pages/Testing";
 import CallData from "./pages/CallData";
 import AudioFiles from "./pages/AudioFiles";
 import Analytics from "./pages/Analytics";
+import AdvancedAnalytics from "./pages/AdvancedAnalytics";
 import Logs from "./pages/Logs";
 import System from "./pages/System";
 import BusinessDetails from "./pages/BusinessDetails";
@@ -59,6 +60,7 @@ const App = () => (
                           <Route path="/call-data" element={<CallData />} />
                           <Route path="/audio-files" element={<AudioFiles />} />
                           <Route path="/analytics" element={<Analytics />} />
+                          <Route path="/analytics/advanced" element={<AdvancedAnalytics />} />
                           <Route path="/logs" element={<Logs />} />
                           <Route path="/system" element={<System />} />
                           
@@ -81,6 +83,7 @@ const App = () => (
                           <Route path="/call-data" element={<CallData />} />
                           <Route path="/audio-files" element={<AudioFiles />} />
                           <Route path="/analytics" element={<Analytics />} />
+                          <Route path="/analytics/advanced" element={<AdvancedAnalytics />} />
                           <Route path="/logs" element={<Logs />} />
                           <Route path="/system" element={<System />} />
                           <Route path="*" element={<NotFound />} />

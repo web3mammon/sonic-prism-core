@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.serve-audio-snippet]
 verify_jwt = false
+
+[functions.business-intelligence]
+verify_jwt = false

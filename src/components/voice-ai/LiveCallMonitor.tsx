@@ -6,6 +6,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { Phone, Volume2, VolumeX, Mic, MicOff, Clock, Users } from 'lucide-react';
 import { useCallSessions } from '@/hooks/useVoiceAI';
+import { SentimentIndicator } from '@/components/analytics/SentimentIndicator';
 
 interface LiveCallMonitorProps {
   clientId?: string;
@@ -146,6 +147,25 @@ export const LiveCallMonitor: React.FC<LiveCallMonitorProps> = ({
                       <span>Client: {call.client_id}</span>
                     </div>
                   </div>
+
+                  {/* Sentiment & Conversation Flow */}
+                  {call.sentiment_score !== null && (
+                    <div className="flex items-center justify-between">
+                      <SentimentIndicator score={call.sentiment_score} showLabel size="sm" />
+                      {call.conversation_stage && (
+                        <Badge variant="outline" className="text-xs">
+                          {call.conversation_stage}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Transfer Alert */}
+                  {call.transfer_requested && (
+                    <Badge variant="destructive" className="w-full justify-center">
+                      Transfer Requested
+                    </Badge>
+                  )}
 
                   {/* Recent Transcript Preview */}
                   {call.transcript && call.transcript.length > 0 && (
