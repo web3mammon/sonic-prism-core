@@ -1,0 +1,16 @@
+[Unit]
+Description=Klariqo Client Provisioning Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/klariqo/voice-ai-platform
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PYTHONPATH=/opt/klariqo/voice-ai-platform
+ExecStart=/usr/bin/python3 start_provisioning_service.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

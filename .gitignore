@@ -1,0 +1,35 @@
+# Exclude demo/marketing folders
+/travelen/
+/travelhi/
+/shopify/
+/marketingdemo/
+/legacy/
+
+# Exclude documentation (keep only essential docs)
+/investor-replies.md
+/future_updates.md
+/AUTOMATION_SETUP.md
+/SYSTEMD_SERVICE_GUIDE.md
+
+# Exclude temporary files
+/temp/
+*.log
+*.pyc
+__pycache__/
+.env
+.env.*
+
+# Exclude frontend build artifacts
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
+
+# Exclude system files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Keep only core client logic
+# Everything else in clients/ and client_templates/ will be included
