@@ -209,16 +209,16 @@ function mapTwilioStatus(twilioStatus: string): string {
 
 function generateTwiMLResponse(client: any, callSid: string): string {
   const config = client.config || {};
-  const webhookUrl = `https://btqccksigmohyjdxgrrj.supabase.co/functions/v1/voice-ai-stream/${client.client_id}`;
+  const from = ''; // Will be populated by Twilio from call params
+  const to = client.phone_number;
+  
+  // WebSocket URL for bidirectional streaming
+  const streamUrl = `wss://btqccksigmohyjdxgrrj.supabase.co/functions/v1/twilio-voice-webhook?call_sid=${callSid}&caller=${from}&called=${to}`;
   
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">${config.greeting || 'Hello! Please hold while I connect you to our AI assistant.'}</Say>
   <Connect>
-    <Stream url="${webhookUrl}">
-      <Parameter name="client_id" value="${client.client_id}" />
-      <Parameter name="call_sid" value="${callSid}" />
-    </Stream>
+    <Stream url="${streamUrl}" />
   </Connect>
 </Response>`;
 }
