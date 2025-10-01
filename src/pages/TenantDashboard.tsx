@@ -7,6 +7,7 @@ import { MetricsCard } from "@/components/dashboard/MetricsCard";
 import { NotificationBanner } from "@/components/NotificationBanner";
 import { LiveDemoSection } from "@/components/LiveDemoSection";
 import { BusinessInfoSection } from "@/components/BusinessInfoSection";
+import { LiveCallMonitor } from "@/components/voice-ai/LiveCallMonitor";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useClientDashboardStats } from "@/hooks/useClientDashboardStats";
@@ -328,6 +329,19 @@ export default function Dashboard() {
 
         {/* Business Information Section - Only for clients */}
         {isClient && <BusinessInfoSection />}
+
+        {/* Live Call Monitor - Shows active calls with sentiment analysis */}
+        <Card className="lg:col-span-3">
+          <CardHeader>
+            <CardTitle>Live Call Monitoring</CardTitle>
+            <CardDescription>
+              Real-time call tracking with AI sentiment analysis
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <LiveCallMonitor clientId={client?.client_id} />
+          </CardContent>
+        </Card>
 
         {/* Recent Activity */}
         <Card className="lg:col-span-3">

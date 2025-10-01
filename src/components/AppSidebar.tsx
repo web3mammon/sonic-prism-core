@@ -57,7 +57,7 @@ export function AppSidebar() {
       { title: "Audio Files", url: `${basePath}/audio-files`, icon: FileAudio },
       { title: "Analytics", url: `${basePath}/analytics`, icon: BarChart3 },
       { title: "Advanced Analytics", url: `${basePath}/analytics/advanced`, icon: TrendingUp, badge: "AI" },
-      { title: "Logs", url: `${basePath}/logs`, icon: ScrollText },
+      { title: "Call Logs", url: `${basePath}/logs`, icon: ScrollText },
       { title: "System", url: `${basePath}/system`, icon: Settings },
     ] : [])
   ];

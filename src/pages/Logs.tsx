@@ -1,20 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Search, 
   Download, 
   RefreshCw, 
   Filter, 
   Calendar,
-  AlertTriangle,
-  Info,
-  CheckCircle,
-  XCircle,
+  MessageSquare,
+  User,
+  Bot,
   Clock,
-  Loader2
+  Loader2,
+  Phone
 } from "lucide-react";
 import {
   Select,
@@ -24,17 +25,80 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
+import { supabase } from "@/integrations/supabase/client";
+import { SentimentIndicator } from "@/components/analytics/SentimentIndicator";
+
+interface ConversationLog {
+  id: string;
+  call_sid: string;
+  speaker: string;
+  message_type: string;
+  content: string;
+  created_at: string;
+  response_time_ms?: number;
+  audio_files_used?: string[];
+}
 
 export default function Logs() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [levelFilter, setLevelFilter] = useState("all");
+  const [speakerFilter, setSpeakerFilter] = useState("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [logs, setLogs] = useState<ConversationLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCallSid, setSelectedCallSid] = useState<string | null>(null);
 
-  const { client, loading } = useCurrentClient();
+  const { client } = useCurrentClient();
 
-  // For now, we'll show a message that logs are not available yet
-  // In the future, this would connect to a system logs table
-  const logEntries: any[] = [];
+  useEffect(() => {
+    if (client?.client_id) {
+      fetchLogs();
+    }
+  }, [client?.client_id]);
+
+  const fetchLogs = async () => {
+    if (!client?.client_id) return;
+    
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('conversation_logs')
+        .select('*')
+        .eq('client_id', client.client_id)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error) throw error;
+      setLogs(data || []);
+    } catch (error) {
+      console.error('Error fetching conversation logs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchLogs();
+    setIsRefreshing(false);
+  };
+
+  const filteredLogs = logs.filter(log => {
+    const matchesSearch = log.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         log.call_sid.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSpeaker = speakerFilter === "all" || log.speaker === speakerFilter;
+    const matchesCall = !selectedCallSid || log.call_sid === selectedCallSid;
+    return matchesSearch && matchesSpeaker && matchesCall;
+  });
+
+  // Get unique call sids for filtering
+  const uniqueCallSids = [...new Set(logs.map(log => log.call_sid))];
+
+  // Group logs by call
+  const callsWithLogs = uniqueCallSids.map(callSid => ({
+    callSid,
+    logs: logs.filter(log => log.call_sid === callSid),
+    timestamp: logs.find(log => log.call_sid === callSid)?.created_at || ''
+  })).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
   if (loading) {
     return (
@@ -44,75 +108,24 @@ export default function Logs() {
     );
   }
 
-  const filteredLogs = logEntries.filter(log => {
-    const matchesSearch = log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.source.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (log.callId && log.callId.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesLevel = levelFilter === "all" || log.level === levelFilter;
-    return matchesSearch && matchesLevel;
-  });
-
-  const getLevelIcon = (level: string) => {
-    switch (level) {
-      case "error":
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case "warning":
-        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-      case "info":
-        return <Info className="h-4 w-4 text-blue-500" />;
-      case "debug":
-        return <CheckCircle className="h-4 w-4 text-gray-500" />;
-      default:
-        return <Info className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
-  const getLevelBadge = (level: string) => {
-    switch (level) {
-      case "error":
-        return <Badge variant="destructive">Error</Badge>;
-      case "warning":
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400">Warning</Badge>;
-      case "info":
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">Info</Badge>;
-      case "debug":
-        return <Badge variant="outline">Debug</Badge>;
-      default:
-        return <Badge variant="secondary">{level}</Badge>;
-    }
-  };
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    // Here you would fetch fresh logs from your backend
-    setTimeout(() => setIsRefreshing(false), 1000);
-  };
-
-  const logLevelCounts = {
-    error: 0,
-    warning: 0,
-    info: 0,
-    debug: 0,
-  };
-
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">System Logs</h1>
+        <h1 className="text-3xl font-bold">Call Conversation Logs</h1>
         <p className="text-muted-foreground">
-          Monitor system events, errors, and debugging information
+          View detailed conversation transcripts and interactions
         </p>
       </div>
 
-      {/* Log Level Summary */}
+      {/* Summary Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
-              <XCircle className="h-5 w-5 text-red-500" />
+              <Phone className="h-5 w-5 text-blue-500" />
               <div>
-                <p className="text-2xl font-bold text-red-600">{logLevelCounts.error}</p>
-                <p className="text-sm text-muted-foreground">Errors</p>
+                <p className="text-2xl font-bold">{uniqueCallSids.length}</p>
+                <p className="text-sm text-muted-foreground">Total Calls</p>
               </div>
             </div>
           </CardContent>
@@ -120,10 +133,10 @@ export default function Logs() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
-              <AlertTriangle className="h-5 w-5 text-yellow-500" />
+              <MessageSquare className="h-5 w-5 text-green-500" />
               <div>
-                <p className="text-2xl font-bold text-yellow-600">{logLevelCounts.warning}</p>
-                <p className="text-sm text-muted-foreground">Warnings</p>
+                <p className="text-2xl font-bold">{logs.length}</p>
+                <p className="text-sm text-muted-foreground">Messages</p>
               </div>
             </div>
           </CardContent>
@@ -131,10 +144,10 @@ export default function Logs() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
-              <Info className="h-5 w-5 text-blue-500" />
+              <User className="h-5 w-5 text-purple-500" />
               <div>
-                <p className="text-2xl font-bold text-blue-600">{logLevelCounts.info}</p>
-                <p className="text-sm text-muted-foreground">Info</p>
+                <p className="text-2xl font-bold">{logs.filter(l => l.speaker === 'user').length}</p>
+                <p className="text-sm text-muted-foreground">User Messages</p>
               </div>
             </div>
           </CardContent>
@@ -142,10 +155,10 @@ export default function Logs() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
-              <CheckCircle className="h-5 w-5 text-gray-500" />
+              <Bot className="h-5 w-5 text-orange-500" />
               <div>
-                <p className="text-2xl font-bold text-gray-600">{logLevelCounts.debug}</p>
-                <p className="text-sm text-muted-foreground">Debug</p>
+                <p className="text-2xl font-bold">{logs.filter(l => l.speaker === 'assistant').length}</p>
+                <p className="text-sm text-muted-foreground">AI Responses</p>
               </div>
             </div>
           </CardContent>
@@ -155,9 +168,9 @@ export default function Logs() {
       {/* Log Viewer */}
       <Card>
         <CardHeader>
-          <CardTitle>Live System Logs</CardTitle>
+          <CardTitle>Conversation Logs</CardTitle>
           <CardDescription>
-            Real-time system events and debugging information
+            Real-time conversation transcripts from your Voice AI calls
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -165,78 +178,137 @@ export default function Logs() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search logs by message, source, or call ID..."
+                placeholder="Search by message or call ID..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Select value={levelFilter} onValueChange={setLevelFilter}>
+            <Select value={speakerFilter} onValueChange={setSpeakerFilter}>
               <SelectTrigger className="w-48">
                 <Filter className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Filter by level" />
+                <SelectValue placeholder="Filter by speaker" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Levels</SelectItem>
-                <SelectItem value="error">Errors Only</SelectItem>
-                <SelectItem value="warning">Warnings Only</SelectItem>
-                <SelectItem value="info">Info Only</SelectItem>
-                <SelectItem value="debug">Debug Only</SelectItem>
+                <SelectItem value="all">All Speakers</SelectItem>
+                <SelectItem value="user">User Only</SelectItem>
+                <SelectItem value="assistant">AI Only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select 
+              value={selectedCallSid || "all"} 
+              onValueChange={(val) => setSelectedCallSid(val === "all" ? null : val)}
+            >
+              <SelectTrigger className="w-64">
+                <Phone className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Filter by call" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Calls</SelectItem>
+                {uniqueCallSids.slice(0, 10).map(callSid => (
+                  <SelectItem key={callSid} value={callSid}>
+                    {callSid.substring(0, 20)}...
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
               <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
-            <Button variant="outline">
-              <Calendar className="mr-2 h-4 w-4" />
-              Date Range
-            </Button>
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
           </div>
 
-          {/* Log Entries */}
-          <div className="space-y-2 max-h-96 overflow-y-auto">
-            {filteredLogs.map((log) => (
-              <div key={log.id} className="flex items-start space-x-4 p-3 border rounded-lg hover:bg-muted/50 text-sm">
-                <div className="flex items-center space-x-2 w-32 flex-shrink-0">
-                  <Clock className="h-3 w-3 text-muted-foreground" />
-                  <span className="text-xs text-muted-foreground">
-                    {log.timestamp.split(' ')[1]}
-                  </span>
-                </div>
-                
-                <div className="flex items-center space-x-2 w-20 flex-shrink-0">
-                  {getLevelIcon(log.level)}
-                  {getLevelBadge(log.level)}
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <span className="font-medium">{log.source}</span>
-                    {log.callId && (
-                      <Badge variant="outline" className="text-xs">
-                        {log.callId}
-                      </Badge>
-                    )}
+          {/* Conversation Logs by Call */}
+          {selectedCallSid ? (
+            // Show detailed view for selected call
+            <ScrollArea className="h-[600px] pr-4">
+              <div className="space-y-4">
+                {filteredLogs.map((log) => (
+                  <div 
+                    key={log.id} 
+                    className={`flex gap-4 p-4 border rounded-lg ${
+                      log.speaker === 'user' ? 'bg-blue-50 dark:bg-blue-950/20' : 'bg-green-50 dark:bg-green-950/20'
+                    }`}
+                  >
+                    <div className="flex-shrink-0">
+                      {log.speaker === 'user' ? (
+                        <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+                          <User className="h-5 w-5 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                          <Bot className="h-5 w-5 text-white" />
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Badge variant={log.speaker === 'user' ? 'secondary' : 'default'}>
+                          {log.speaker === 'user' ? 'User' : 'AI Assistant'}
+                        </Badge>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          {new Date(log.created_at).toLocaleTimeString()}
+                          {log.response_time_ms && (
+                            <span>• {log.response_time_ms}ms</span>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm leading-relaxed">{log.content}</p>
+                      {log.audio_files_used && log.audio_files_used.length > 0 && (
+                        <Badge variant="outline" className="text-xs">
+                          Audio snippet used
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-foreground">{log.message}</p>
-                  {log.details && (
-                    <p className="text-muted-foreground text-xs mt-1">{log.details}</p>
-                  )}
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </ScrollArea>
+          ) : (
+            // Show call list view
+            <div className="space-y-3">
+              {callsWithLogs.map((call) => (
+                <Card 
+                  key={call.callSid} 
+                  className="cursor-pointer hover:shadow-md transition-shadow"
+                  onClick={() => setSelectedCallSid(call.callSid)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Phone className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium">{call.callSid}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {call.logs.length} messages • {new Date(call.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm">
+                        View Details
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
 
-          {filteredLogs.length === 0 && (
+          {filteredLogs.length === 0 && !selectedCallSid && (
             <div className="text-center py-8 text-muted-foreground">
-              <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>System logs for {client?.business_name || 'this client'} will appear here when available.</p>
-              <p className="text-sm mt-1">No log entries found at this time.</p>
+              <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No conversation logs found for {client?.business_name || 'this client'}.</p>
+              <p className="text-sm mt-1">Logs will appear here as calls are handled.</p>
+            </div>
+          )}
+
+          {selectedCallSid && (
+            <div className="mt-4 flex justify-center">
+              <Button variant="outline" onClick={() => setSelectedCallSid(null)}>
+                ← Back to All Calls
+              </Button>
             </div>
           )}
         </CardContent>
