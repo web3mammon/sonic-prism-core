@@ -1,5 +1,17 @@
 project_id = "btqccksigmohyjdxgrrj"
 
+[functions.twilio-voice-webhook]
+verify_jwt = false
+
+[functions.voice-stt]
+verify_jwt = false
+
+[functions.voice-tts]
+verify_jwt = false
+
+[functions.voice-router]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 54321
