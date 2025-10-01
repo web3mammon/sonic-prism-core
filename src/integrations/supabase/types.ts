@@ -66,7 +66,6 @@ export type Database = {
       }
       call_sessions: {
         Row: {
-          business_name: string | null
           call_sid: string
           caller_number: string | null
           client_id: string
@@ -75,9 +74,7 @@ export type Database = {
           duration_seconds: number | null
           end_time: string | null
           id: string
-          intent: Database["public"]["Enums"]["intent"] | null
           metadata: Json | null
-          prospect_name: string | null
           recording_url: string | null
           start_time: string
           status: string
@@ -86,7 +83,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          business_name?: string | null
           call_sid: string
           caller_number?: string | null
           client_id: string
@@ -95,9 +91,7 @@ export type Database = {
           duration_seconds?: number | null
           end_time?: string | null
           id?: string
-          intent?: Database["public"]["Enums"]["intent"] | null
           metadata?: Json | null
-          prospect_name?: string | null
           recording_url?: string | null
           start_time?: string
           status: string
@@ -106,7 +100,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          business_name?: string | null
           call_sid?: string
           caller_number?: string | null
           client_id?: string
@@ -115,9 +108,7 @@ export type Database = {
           duration_seconds?: number | null
           end_time?: string | null
           id?: string
-          intent?: Database["public"]["Enums"]["intent"] | null
           metadata?: Json | null
-          prospect_name?: string | null
           recording_url?: string | null
           start_time?: string
           status?: string
@@ -135,123 +126,30 @@ export type Database = {
           },
         ]
       }
-      conversation_logs: {
-        Row: {
-          audio_files_used: string[] | null
-          call_sid: string
-          client_id: string
-          content: string
-          created_at: string | null
-          id: string
-          message_type: string
-          response_time_ms: number | null
-          speaker: string
-        }
-        Insert: {
-          audio_files_used?: string[] | null
-          call_sid: string
-          client_id: string
-          content: string
-          created_at?: string | null
-          id?: string
-          message_type: string
-          response_time_ms?: number | null
-          speaker: string
-        }
-        Update: {
-          audio_files_used?: string[] | null
-          call_sid?: string
-          client_id?: string
-          content?: string
-          created_at?: string | null
-          id?: string
-          message_type?: string
-          response_time_ms?: number | null
-          speaker?: string
-        }
-        Relationships: []
-      }
       credits: {
         Row: {
           balance: number
-          calls_included: number | null
           created_at: string
           currency: string
           id: string
-          last_payment_amount: number | null
-          last_payment_date: string | null
-          monthly_base_fee: number | null
-          payment_method: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           balance?: number
-          calls_included?: number | null
           created_at?: string
           currency?: string
           id?: string
-          last_payment_amount?: number | null
-          last_payment_date?: string | null
-          monthly_base_fee?: number | null
-          payment_method?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           balance?: number
-          calls_included?: number | null
           created_at?: string
           currency?: string
           id?: string
-          last_payment_amount?: number | null
-          last_payment_date?: string | null
-          monthly_base_fee?: number | null
-          payment_method?: string | null
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      leads: {
-        Row: {
-          business_name: string | null
-          called_at: string | null
-          client_id: string
-          created_at: string | null
-          id: string
-          industry: string | null
-          notes: string | null
-          phone_number: string
-          priority: number | null
-          prospect_name: string | null
-          status: string | null
-        }
-        Insert: {
-          business_name?: string | null
-          called_at?: string | null
-          client_id: string
-          created_at?: string | null
-          id?: string
-          industry?: string | null
-          notes?: string | null
-          phone_number: string
-          priority?: number | null
-          prospect_name?: string | null
-          status?: string | null
-        }
-        Update: {
-          business_name?: string | null
-          called_at?: string | null
-          client_id?: string
-          created_at?: string | null
-          id?: string
-          industry?: string | null
-          notes?: string | null
-          phone_number?: string
-          priority?: number | null
-          prospect_name?: string | null
-          status?: string | null
         }
         Relationships: []
       }
@@ -471,97 +369,49 @@ export type Database = {
       }
       voice_ai_clients: {
         Row: {
-          active_hours: Json | null
-          api_proxy_path: string | null
-          audio_snippets: Json | null
-          base_url: string | null
-          business_context: Json | null
-          business_hours: Json | null
           business_name: string
-          call_transfer_number: string | null
           client_id: string
           client_slug: string | null
           config: Json
-          conversation_config: Json | null
           created_at: string
-          greeting_message: string | null
           id: string
           industry: string
           phone_number: string | null
           port: number
           region: string
           status: string
-          stt_config: Json | null
-          system_prompt: string | null
-          timezone: string | null
-          transfer_context: string | null
-          tts_config: Json | null
           updated_at: string
           user_id: string
-          voice_id: string | null
-          webhook_url: string | null
         }
         Insert: {
-          active_hours?: Json | null
-          api_proxy_path?: string | null
-          audio_snippets?: Json | null
-          base_url?: string | null
-          business_context?: Json | null
-          business_hours?: Json | null
           business_name: string
-          call_transfer_number?: string | null
           client_id: string
           client_slug?: string | null
           config?: Json
-          conversation_config?: Json | null
           created_at?: string
-          greeting_message?: string | null
           id?: string
           industry: string
           phone_number?: string | null
           port: number
           region: string
           status?: string
-          stt_config?: Json | null
-          system_prompt?: string | null
-          timezone?: string | null
-          transfer_context?: string | null
-          tts_config?: Json | null
           updated_at?: string
           user_id: string
-          voice_id?: string | null
-          webhook_url?: string | null
         }
         Update: {
-          active_hours?: Json | null
-          api_proxy_path?: string | null
-          audio_snippets?: Json | null
-          base_url?: string | null
-          business_context?: Json | null
-          business_hours?: Json | null
           business_name?: string
-          call_transfer_number?: string | null
           client_id?: string
           client_slug?: string | null
           config?: Json
-          conversation_config?: Json | null
           created_at?: string
-          greeting_message?: string | null
           id?: string
           industry?: string
           phone_number?: string | null
           port?: number
           region?: string
           status?: string
-          stt_config?: Json | null
-          system_prompt?: string | null
-          timezone?: string | null
-          transfer_context?: string | null
-          tts_config?: Json | null
           updated_at?: string
           user_id?: string
-          voice_id?: string | null
-          webhook_url?: string | null
         }
         Relationships: []
       }
@@ -600,13 +450,6 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "team_member" | "client"
-      intent:
-        | "Emergency Service"
-        | "Appointment Booking"
-        | "Quote Request"
-        | "General Inquiry"
-        | "Complaint"
-        | "Follow up"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -735,14 +578,6 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "team_member", "client"],
-      intent: [
-        "Emergency Service",
-        "Appointment Booking",
-        "Quote Request",
-        "General Inquiry",
-        "Complaint",
-        "Follow up",
-      ],
     },
   },
 } as const
