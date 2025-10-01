@@ -1,1 +1,4 @@
 project_id = "btqccksigmohyjdxgrrj"
+
+[functions.voice-websocket]
+verify_jwt = false
