@@ -32,40 +32,56 @@ serve(async (req) => {
       throw new Error(`Failed to get client: ${clientError.message}`)
     }
 
-    // 2. Create the directory structure (this would call a system command)
-    const provisioningData = {
-      client_id,
-      business_name,
-      region,
-      industry,
-      client_slug,
-      port: client.port,
-      status: 'provisioning'
-    }
-
-    // 3. Update client status to provisioning
+    // 2. Update client status to provisioning
     await supabase
       .from('voice_ai_clients')
       .update({ status: 'provisioning' })
       .eq('client_id', client_id)
 
-    // 4. Make HTTP request to the main server to handle file operations
-    const provisioningResponse = await fetch(`http://localhost:8080/api/provision-client`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // 3. Initialize client configuration in database
+    const defaultConfig = {
+      voice_id: '6FINSXmstr7jTeJkpd2r', // Default ElevenLabs voice
+      system_prompt: `You are a professional AI assistant for ${business_name}. Be helpful, concise, and friendly.`,
+      business_context: {
+        name: business_name,
+        region: region,
+        industry: industry
       },
-      body: JSON.stringify(provisioningData)
-    })
-
-    if (!provisioningResponse.ok) {
-      throw new Error('Client provisioning failed on server')
+      active_hours: {
+        enabled: true,
+        hours: {
+          monday: { open: '09:00', close: '17:00' },
+          tuesday: { open: '09:00', close: '17:00' },
+          wednesday: { open: '09:00', close: '17:00' },
+          thursday: { open: '09:00', close: '17:00' },
+          friday: { open: '09:00', close: '17:00' },
+          saturday: { open: '10:00', close: '14:00' },
+          sunday: { open: 'closed', close: 'closed' }
+        }
+      },
+      conversation_config: {
+        model: 'gpt-4',
+        max_tokens: 150,
+        temperature: 0.7
+      },
+      tts_config: {
+        model: 'eleven_turbo_v2_5',
+        stability: 0.5,
+        similarity_boost: 0.75
+      },
+      audio_snippets: {
+        intro_greeting: `intro_greeting.ulaw`,
+        after_hours_greeting: `after_hours_greeting.ulaw`
+      }
     }
 
-    // 5. Update client status to active
+    // 4. Update client config
     await supabase
       .from('voice_ai_clients')
-      .update({ status: 'active' })
+      .update({ 
+        config: defaultConfig,
+        status: 'active' 
+      })
       .eq('client_id', client_id)
 
     console.log('✅ Client provisioning completed for:', client_id)
