@@ -38,47 +38,120 @@ serve(async (req) => {
       .update({ status: 'provisioning' })
       .eq('client_id', client_id)
 
-    // 3. Initialize client configuration in database
+    // 3. Generate industry-specific AI configuration
+    const industryPrompts: Record<string, string> = {
+      plmb: `You are an AI receptionist for ${business_name}, a professional plumbing service. Your role is to:
+- Greet callers warmly and professionally
+- Identify the nature of plumbing emergencies (burst pipes, blocked drains, gas leaks, hot water issues)
+- Determine urgency level and schedule appointments accordingly
+- Collect caller details: name, address, phone number, and issue description
+- For emergencies, prioritize immediate dispatch
+- Quote standard service call fees when asked
+- Be empathetic for stressful situations like floods or no hot water
+Keep responses concise (under 50 words) and natural for voice conversations.`,
+      
+      elec: `You are an AI receptionist for ${business_name}, a licensed electrical service. Your role is to:
+- Answer calls professionally and identify electrical issues
+- Assess urgency (power outages, sparking, safety hazards are HIGH priority)
+- Schedule appointments for installations, repairs, and safety inspections
+- Collect caller information and property details
+- Emphasize safety for dangerous situations
+- Provide service call fee information
+Keep responses brief and reassuring for voice calls.`,
+      
+      hvac: `You are an AI receptionist for ${business_name}, an HVAC service company. Your role is to:
+- Handle inquiries about heating, cooling, and ventilation systems
+- Identify urgent issues (no heating in winter, no cooling in summer, gas smells)
+- Schedule service appointments and maintenance visits
+- Collect property details and system information
+- Quote service fees and maintenance packages
+Keep responses conversational and under 50 words.`,
+      
+      clean: `You are an AI receptionist for ${business_name}, a professional cleaning service. Your role is to:
+- Take booking requests for residential and commercial cleaning
+- Identify service type: regular cleaning, deep cleaning, move-in/out, or special requests
+- Collect property size, location, and specific requirements
+- Schedule appointments and provide quote estimates
+- Ask about frequency preferences (one-time, weekly, fortnightly)
+Keep responses friendly and efficient.`,
+      
+      misc: `You are an AI receptionist for ${business_name}. Your role is to:
+- Greet callers professionally and warmly
+- Understand their service needs
+- Collect contact information and service details
+- Schedule appointments at convenient times
+- Provide general information about services and fees
+Keep responses natural and concise for voice conversations.`
+    }
+
+    const greetingMessages: Record<string, string> = {
+      plmb: `Thanks for calling ${business_name}, your trusted local plumber. How can I help you today?`,
+      elec: `Good day, you've reached ${business_name} electrical services. What can I assist you with?`,
+      hvac: `Hello, ${business_name} heating and cooling. How may I help you today?`,
+      clean: `Hi there, ${business_name} cleaning services. How can I brighten your day?`,
+      misc: `Hello, you've reached ${business_name}. How may I assist you today?`
+    }
+
     const defaultConfig = {
-      voice_id: '6FINSXmstr7jTeJkpd2r', // Default ElevenLabs voice
-      system_prompt: `You are a professional AI assistant for ${business_name}. Be helpful, concise, and friendly.`,
+      voice_id: '6FINSXmstr7jTeJkpd2r', // Professional, neutral voice
+      system_prompt: industryPrompts[industry] || industryPrompts.misc,
+      greeting_message: greetingMessages[industry] || greetingMessages.misc,
       business_context: {
         name: business_name,
         region: region,
-        industry: industry
+        industry: industry,
+        client_slug: client_slug
       },
       active_hours: {
         enabled: true,
+        timezone: 'Australia/Sydney',
         hours: {
-          monday: { open: '09:00', close: '17:00' },
-          tuesday: { open: '09:00', close: '17:00' },
-          wednesday: { open: '09:00', close: '17:00' },
-          thursday: { open: '09:00', close: '17:00' },
-          friday: { open: '09:00', close: '17:00' },
-          saturday: { open: '10:00', close: '14:00' },
-          sunday: { open: 'closed', close: 'closed' }
+          monday: { open: '07:00', close: '17:00' },
+          tuesday: { open: '07:00', close: '17:00' },
+          wednesday: { open: '07:00', close: '17:00' },
+          thursday: { open: '07:00', close: '17:00' },
+          friday: { open: '07:00', close: '17:00' },
+          saturday: { open: '08:00', close: '12:00' },
+          sunday: { closed: true }
         }
       },
       conversation_config: {
         model: 'gpt-4',
         max_tokens: 150,
-        temperature: 0.7
+        temperature: 0.7,
+        enable_recording: true,
+        enable_transcription: true
       },
       tts_config: {
+        provider: 'elevenlabs',
         model: 'eleven_turbo_v2_5',
         stability: 0.5,
         similarity_boost: 0.75
       },
-      audio_snippets: {
-        intro_greeting: `intro_greeting.ulaw`,
-        after_hours_greeting: `after_hours_greeting.ulaw`
-      }
+      stt_config: {
+        provider: 'deepgram',
+        model: 'nova-2',
+        language: 'en-AU'
+      },
+      call_transfer_enabled: false,
+      transfer_threshold: -0.5,
+      audio_snippets: {}
     }
 
-    // 4. Update client config
+    // 4. Update client with personalized configuration
     await supabase
       .from('voice_ai_clients')
       .update({ 
+        system_prompt: industryPrompts[industry] || industryPrompts.misc,
+        greeting_message: greetingMessages[industry] || greetingMessages.misc,
+        voice_id: '6FINSXmstr7jTeJkpd2r',
+        business_context: defaultConfig.business_context,
+        active_hours: defaultConfig.active_hours,
+        conversation_config: defaultConfig.conversation_config,
+        tts_config: defaultConfig.tts_config,
+        stt_config: defaultConfig.stt_config,
+        call_transfer_enabled: false,
+        transfer_threshold: -0.5,
         config: defaultConfig,
         status: 'active' 
       })

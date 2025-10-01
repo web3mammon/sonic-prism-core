@@ -23,9 +23,8 @@ export default function BusinessSetup() {
   // Redirect to dashboard if setup is already complete
   const extendedProfile = profile as any;
   if (extendedProfile?.onboarding_completed && !clientInfo) {
-    // If already onboarded but no clientInfo, redirect to a default dashboard
-    // TODO: In future, we could query voice_ai_clients table to get their actual client URL
-    return <Navigate to="/au/plmb/jamesonplumbing" replace />;
+    // Query their actual client and redirect there
+    return <Navigate to="/central-hq" replace />;
   }
 
   // Redirect to newly created client dashboard after successful setup
