@@ -24,7 +24,6 @@ React App → Supabase (DB + Auth + Edge Functions) → Twilio (Voice) → AI Se
 - `src/` - React frontend (TypeScript + TailwindCSS)
 - `supabase/functions/` - Deno edge functions (all AI/voice logic)
 - `supabase/migrations/` - Database schema
-- `audio-optimiser.py` - Audio converter (μ-law format tool)
 
 ## 🗄️ Key Tables
 
@@ -64,8 +63,8 @@ React App → Supabase (DB + Auth + Edge Functions) → Twilio (Voice) → AI Se
 
 ## 📝 Migration Complete
 
-✅ All Python → Deno/TypeScript
-✅ Zero Python runtime dependencies
-✅ Fully serverless on Supabase
+✅ **All Python removed** - Pure TypeScript/Deno stack
+✅ **Zero Python runtime** - Fully serverless on Supabase
+✅ **100% edge functions** - Scalable, fast, maintainable
 
-See edge function logs for debugging.
+Test: Call your Twilio number configured with webhook URL above.
