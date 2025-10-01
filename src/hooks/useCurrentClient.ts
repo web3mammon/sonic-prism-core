@@ -40,20 +40,21 @@ export function useCurrentClient(): CurrentClientData {
         }
 
         if (data && data.length > 0) {
-          const clientData = data[0];
+          const clientData = data[0] as any; // Type assertion until types regenerate
           setClient({
             id: clientData.client_id || '',
             user_id: clientData.user_id,
             client_id: clientData.client_id,
-            region: region,
-            industry: industry,
+            region: clientData.region || region,
+            industry: clientData.industry || industry,
             business_name: clientData.business_name,
-            port: clientData.port || 3011, // Use port from database
+            port: clientData.port || 3011,
             api_proxy_path: clientData.api_proxy_path || `/api/${clientname}`,
+            phone_number: clientData.phone_number,
             status: (clientData.status as 'active' | 'inactive' | 'starting' | 'stopping' | 'error') || 'inactive',
             config: (clientData.config as any) || {},
             created_at: clientData.created_at,
-            updated_at: clientData.created_at // Using created_at as fallback
+            updated_at: clientData.created_at
           });
         } else {
           setClient(null);

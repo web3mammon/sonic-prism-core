@@ -83,8 +83,8 @@ export default function BusinessDetails() {
           service_area: formData.serviceArea,
           business_hours: formData.businessHours,
           services_offered: formData.servicesOffered,
-          emergency_fee: formData.emergencyFee,
-          service_fee: formData.serviceFee,
+          emergency_fee: formData.emergencyFee ? parseFloat(formData.emergencyFee) : null,
+          service_fee: formData.serviceFee ? parseFloat(formData.serviceFee) : null,
           updated_at: new Date().toISOString()
         })
         .eq('id', profile.id);

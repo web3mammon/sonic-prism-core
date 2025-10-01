@@ -294,8 +294,8 @@ export default function CallData() {
                 <CalendarComponent
                   initialFocus
                   mode="range"
-                  defaultMonth={dateRange.from}
-                  selected={dateRange}
+                  defaultMonth={dateRange?.from}
+                  selected={dateRange?.from && dateRange?.to ? dateRange as any : undefined}
                   onSelect={(range) => setDateRange(range || {})}
                   numberOfMonths={2}
                 />

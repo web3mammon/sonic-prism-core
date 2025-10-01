@@ -84,7 +84,7 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
       // Create voice_ai_clients record (database triggers will auto-assign port and api_proxy_path)
       const { error: clientError } = await supabase
         .from('voice_ai_clients')
-        .insert({
+        .insert([{
           client_id: clientId,
           user_id: user.id,
           business_name: businessName,
@@ -92,6 +92,7 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
           industry: industry,
           client_slug: clientSlug,
           status: 'active',
+          port: 3011, // Will be auto-assigned by trigger if needed
           config: {
             business_type: businessType,
             service_fee: parseFloat(serviceFee),
@@ -102,7 +103,7 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
               analytics: true
             }
           }
-        });
+        }]);
 
       if (clientError) throw clientError;
 
