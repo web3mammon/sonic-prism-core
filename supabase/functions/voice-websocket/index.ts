@@ -193,7 +193,7 @@ class VoiceSession {
     const voiceId = this.client.voice_id || '6FINSXmstr7jTeJkpd2r';
     const ttsConfig = this.client.tts_config || {};
     
-    const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=${ttsConfig.model || 'eleven_turbo_v2_5'}`;
+    const wsUrl = `wss://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream-input?model_id=${ttsConfig.model || 'eleven_turbo_v2_5'}&output_format=ulaw_8000`;
     
     this.elevenLabsSocket = new WebSocket(wsUrl);
 
