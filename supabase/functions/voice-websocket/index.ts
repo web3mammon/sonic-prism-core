@@ -135,7 +135,8 @@ class VoiceSession {
       return;
     }
 
-    const deepgramUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&punctuate=true&interim_results=true&utterance_end_ms=1000&vad_events=true`;
+    // Twilio sends μ-law encoded audio at 8kHz, mono
+    const deepgramUrl = `wss://api.deepgram.com/v1/listen?model=nova-2&language=en&encoding=mulaw&sample_rate=8000&channels=1&punctuate=true&interim_results=true&utterance_end_ms=1000&vad_events=true`;
     
     this.deepgramSocket = new WebSocket(deepgramUrl, {
       headers: {
@@ -328,17 +329,34 @@ class VoiceSession {
   }
 
   private async playAudioSnippet(audioFile: string) {
-    // Fetch audio file from Supabase Storage or database
-    const { data: audio } = await this.supabase
-      .from('audio_files')
-      .select('file_path')
-      .eq('client_id', this.client.client_id)
-      .eq('file_name', audioFile)
-      .single();
+    try {
+      // Fetch audio snippet from the serve-audio-snippet edge function
+      const snippetUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/serve-audio-snippet?client_id=${this.client.client_id}&filename=${audioFile}`;
+      
+      const response = await fetch(snippetUrl);
+      
+      if (!response.ok) {
+        console.error(`❌ Failed to fetch audio snippet: ${response.status}`);
+        return;
+      }
 
-    if (audio?.file_path) {
-      // TODO: Stream audio file to Twilio
-      console.log(`🎵 Playing audio snippet: ${audio.file_path}`);
+      const audioData = await response.text(); // base64 μ-law audio
+      
+      // Send audio snippet to Twilio
+      if (this.streamSid && this.twilioSocket.readyState === WebSocket.OPEN) {
+        const mediaMessage = {
+          event: 'media',
+          streamSid: this.streamSid,
+          media: {
+            payload: audioData
+          }
+        };
+        
+        this.twilioSocket.send(JSON.stringify(mediaMessage));
+        console.log(`🎵 Playing audio snippet: ${audioFile}`);
+      }
+    } catch (error) {
+      console.error('❌ Error playing audio snippet:', error);
     }
   }
 
@@ -480,16 +498,35 @@ class VoiceSession {
   private sendAudioToTwilio(base64Audio: string) {
     if (!this.streamSid) return;
 
-    const mediaMessage = {
-      event: 'media',
-      streamSid: this.streamSid,
-      media: {
-        payload: base64Audio
-      }
-    };
+    // ElevenLabs returns MP3/MPEG, but Twilio expects μ-law at 8kHz
+    // For now, we'll convert the audio format
+    // Note: This is a simplified conversion. In production, use proper audio codec library
     
-    if (this.twilioSocket.readyState === WebSocket.OPEN) {
-      this.twilioSocket.send(JSON.stringify(mediaMessage));
+    try {
+      // Decode base64 MP3 audio
+      const mp3Binary = atob(base64Audio);
+      const mp3Bytes = new Uint8Array(mp3Binary.length);
+      for (let i = 0; i < mp3Binary.length; i++) {
+        mp3Bytes[i] = mp3Binary.charCodeAt(i);
+      }
+
+      // TODO: Implement proper MP3 to μ-law conversion
+      // For now, we're passing through the audio as-is
+      // This may cause audio quality issues that need proper codec conversion
+      
+      const mediaMessage = {
+        event: 'media',
+        streamSid: this.streamSid,
+        media: {
+          payload: base64Audio
+        }
+      };
+      
+      if (this.twilioSocket.readyState === WebSocket.OPEN) {
+        this.twilioSocket.send(JSON.stringify(mediaMessage));
+      }
+    } catch (error) {
+      console.error('❌ Error sending audio to Twilio:', error);
     }
   }
 
