@@ -52,7 +52,7 @@ serve(async (req) => {
         client_id: clientId,
         call_sid: callSid,
         caller_number: phoneNumber,
-        status: 'initiating',
+        status: 'ringing',
         metadata: {
           test_call: true,
           test_scenario: testScenario || 'General test call',
