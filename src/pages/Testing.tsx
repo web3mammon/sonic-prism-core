@@ -10,24 +10,26 @@ import { useClientAPI } from "@/hooks/useClientAPI";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Testing() {
   const [isCallActive, setIsCallActive] = useState(false);
   const [testNumber, setTestNumber] = useState("");
   const [testScript, setTestScript] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { client, makeAPICall, apiUrl, loading } = useClientAPI();
+  const { client: apiClient } = useClientAPI();
+  const { client: currentClient } = useCurrentClient();
   const { profile } = useAuth();
 
-  // Real API call to start test
+  // Real test call using actual voice AI pipeline
   const handleStartTest = async () => {
     if (!testNumber) {
       toast.error("Please enter a test phone number");
       return;
     }
 
-    if (!apiUrl) {
-      toast.error("Client API not available");
+    if (!currentClient?.client_id) {
+      toast.error("No client selected");
       return;
     }
 
@@ -35,18 +37,25 @@ export default function Testing() {
       setIsLoading(true);
       setIsCallActive(true);
 
-      // Call the actual client API test endpoint
-      const response = await makeAPICall(`/call_test/${encodeURIComponent(testNumber)}`, {
-        method: 'GET'
+      // Call edge function that uses Deepgram → GPT → TTS pipeline
+      const { data, error } = await supabase.functions.invoke('test-voice-call', {
+        body: {
+          clientId: currentClient.client_id,
+          phoneNumber: testNumber,
+          testScenario: testScript || 'General voice AI test',
+        }
       });
 
-      toast.success(`Test call initiated! Call SID: ${response.call_sid}`);
+      if (error) throw error;
 
-      // Monitor call status (simplified - in production you'd use websockets)
+      toast.success(`Test call initiated! This will test the full voice AI pipeline: Deepgram STT → GPT → TTS`);
+      console.log('Test call details:', data);
+
+      // Monitor call status
       setTimeout(() => {
         setIsCallActive(false);
-        toast.info("Test call completed");
-      }, 10000);
+        toast.info("Test call completed - check call history for results");
+      }, 30000); // 30 seconds for actual conversation test
 
     } catch (error) {
       console.error('Test call failed:', error);
@@ -107,7 +116,7 @@ export default function Testing() {
             <Button
               className="w-full"
               onClick={handleStartTest}
-              disabled={isCallActive || !testNumber || isLoading || loading}
+              disabled={isCallActive || !testNumber || isLoading}
             >
               {isCallActive || isLoading ? (
                 <>
