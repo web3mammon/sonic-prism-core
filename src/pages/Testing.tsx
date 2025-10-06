@@ -46,9 +46,19 @@ export default function Testing() {
         }
       });
 
-      if (error) throw error;
+      console.log('Edge function response:', { data, error });
 
-      toast.success(`Test call initiated! This will test the full voice AI pipeline: Deepgram STT → GPT → TTS`);
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(`Edge function error: ${error.message || JSON.stringify(error)}`);
+      }
+
+      if (data?.error) {
+        console.error('API error:', data.error);
+        throw new Error(data.error);
+      }
+
+      toast.success(`Test call initiated! Call SID: ${data.callSid}`);
       console.log('Test call details:', data);
 
       // Monitor call status
