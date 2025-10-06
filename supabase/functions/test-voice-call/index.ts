@@ -45,16 +45,18 @@ serve(async (req) => {
     }
 
     // Create call session record
+    const callSid = `TEST_${Date.now()}`;
     const { data: session, error: sessionError } = await supabaseClient
       .from('call_sessions')
       .insert({
         client_id: clientId,
-        phone_number: phoneNumber,
-        direction: 'outbound',
+        call_sid: callSid,
+        caller_number: phoneNumber,
         status: 'initiating',
         metadata: {
           test_call: true,
           test_scenario: testScenario || 'General test call',
+          direction: 'outbound',
         }
       })
       .select()
