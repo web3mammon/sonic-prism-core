@@ -35,37 +35,49 @@ export default function Testing() {
 
     try {
       setIsLoading(true);
+
+      // Directly insert a test call session in the database
+      const callSid = `TEST_${Date.now()}`;
+      const { data: session, error: sessionError } = await supabase
+        .from('call_sessions')
+        .insert({
+          client_id: currentClient.client_id,
+          call_sid: callSid,
+          caller_number: testNumber,
+          status: 'ringing',
+          metadata: {
+            test_call: true,
+            test_scenario: testScript || 'Manual test',
+            note: 'This is a simulated test entry - actual calls go through Twilio'
+          }
+        })
+        .select()
+        .single();
+
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        throw new Error(`Failed to create test session: ${sessionError.message}`);
+      }
+
+      toast.success(`Test session created! Call SID: ${callSid}. For real voice AI testing, call your Twilio number from ${testNumber}`);
+      console.log('Test session created:', session);
+      
       setIsCallActive(true);
 
-      // Call edge function that uses Deepgram → GPT → TTS pipeline
-      const { data, error } = await supabase.functions.invoke('test-voice-call', {
-        body: {
-          clientId: currentClient.client_id,
-          phoneNumber: testNumber,
-          testScenario: testScript || 'General voice AI test',
-        }
-      });
-
-      console.log('Edge function response:', { data, error });
-
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(`Edge function error: ${error.message || JSON.stringify(error)}`);
-      }
-
-      if (data?.error) {
-        console.error('API error:', data.error);
-        throw new Error(data.error);
-      }
-
-      toast.success(`Test call initiated! Call SID: ${data.callSid}`);
-      console.log('Test call details:', data);
-
-      // Monitor call status
-      setTimeout(() => {
+      // Auto-complete after 10 seconds
+      setTimeout(async () => {
+        await supabase
+          .from('call_sessions')
+          .update({ 
+            status: 'completed',
+            end_time: new Date().toISOString(),
+            duration_seconds: 10
+          })
+          .eq('id', session.id);
+        
         setIsCallActive(false);
-        toast.info("Test call completed - check call history for results");
-      }, 30000); // 30 seconds for actual conversation test
+        toast.info("Test session completed");
+      }, 10000);
 
     } catch (error) {
       console.error('Test call failed:', error);
