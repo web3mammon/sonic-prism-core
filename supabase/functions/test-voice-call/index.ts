@@ -33,6 +33,7 @@ serve(async (req) => {
       .single();
 
     if (clientError || !client) {
+      console.error('Client lookup error:', clientError);
       throw new Error(`Client not found: ${clientId}`);
     }
 
@@ -44,15 +45,17 @@ serve(async (req) => {
       throw new Error('Twilio credentials not configured');
     }
 
-    // Create call session record
+    // Create call session record with VALID status
     const callSid = `TEST_${Date.now()}`;
+    console.log('Creating call session with call_sid:', callSid);
+    
     const { data: session, error: sessionError } = await supabaseClient
       .from('call_sessions')
       .insert({
         client_id: clientId,
         call_sid: callSid,
         caller_number: phoneNumber,
-        status: 'ringing',
+        status: 'ringing', // VALID status from constraint
         metadata: {
           test_call: true,
           test_scenario: testScenario || 'General test call',
@@ -64,21 +67,23 @@ serve(async (req) => {
 
     if (sessionError) {
       console.error('Error creating session:', sessionError);
-      throw new Error('Failed to create call session');
+      throw new Error(`Failed to create call session: ${sessionError.message}`);
     }
+
+    console.log('Session created:', session.id);
 
     // Get the WebSocket URL for voice streaming
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const wsUrl = `wss://${new URL(SUPABASE_URL!).hostname.replace('.supabase.co', '.functions.supabase.co')}/voice-websocket?client_id=${clientId}&call_sid=${session.call_sid}`;
+    const wsUrl = `wss://${new URL(SUPABASE_URL!).hostname.replace('.supabase.co', '.functions.supabase.co')}/voice-websocket?client_id=${clientId}&call_sid=${callSid}`;
 
     // Create TwiML with WebSocket stream for voice AI pipeline
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna">Connecting you to the AI assistant for testing.</Say>
+  <Say voice="Polly.Joanna">This is a test call. Connecting you to the AI assistant.</Say>
   <Connect>
     <Stream url="${wsUrl}">
       <Parameter name="client_id" value="${clientId}" />
-      <Parameter name="call_sid" value="${session.call_sid}" />
+      <Parameter name="call_sid" value="${callSid}" />
     </Stream>
   </Connect>
 </Response>`;
@@ -95,7 +100,7 @@ serve(async (req) => {
       StatusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'].join(','),
     });
 
-    console.log('Making Twilio API call...');
+    console.log('Making Twilio API call from', client.phone_number, 'to', phoneNumber);
     const twilioResponse = await fetch(twilioUrl, {
       method: 'POST',
       headers: {
@@ -107,19 +112,19 @@ serve(async (req) => {
 
     if (!twilioResponse.ok) {
       const errorText = await twilioResponse.text();
-      console.error('Twilio API error:', errorText);
+      console.error('Twilio API error:', twilioResponse.status, errorText);
       throw new Error(`Twilio API error: ${twilioResponse.status} - ${errorText}`);
     }
 
     const callData = await twilioResponse.json();
-    console.log('Twilio call initiated:', callData.sid);
+    console.log('Twilio call initiated successfully. SID:', callData.sid);
 
-    // Update session with Twilio call SID
+    // Update session with actual Twilio call SID
     await supabaseClient
       .from('call_sessions')
       .update({
         call_sid: callData.sid,
-        status: 'ringing',
+        status: 'in-progress',
         metadata: {
           ...session.metadata,
           twilio_call_sid: callData.sid,
