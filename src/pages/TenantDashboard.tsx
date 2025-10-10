@@ -24,7 +24,10 @@ import {
   DollarSign,
   Settings,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle,
+  CheckCircle,
+  ChevronRight
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -69,8 +72,11 @@ export default function Dashboard() {
   };
 
   const isLowBalance = creditData.balance <= creditData.lowBalanceThreshold;
+  const lowBalanceThreshold = creditData.lowBalanceThreshold;
+  const currency = creditData.currencySymbol;
+  const clientName = client?.business_name || '';
   const balancePercentage = Math.min((creditData.balance / 100) * 100, 100);
-  const callsUsedPercentage = creditData.callsThisMonth > 0
+  const callsPercentage = creditData.callsThisMonth > 0
     ? ((creditData.callsThisMonth / (creditData.callsThisMonth + creditData.callsRemaining)) * 100)
     : 0;
 
@@ -126,305 +132,183 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6 font-manrope">
-      {/* Dynamic Notification Banner */}
-      <NotificationBanner />
-      
-      {/* Low Balance Warning */}
+    <div className="space-y-6 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 min-h-screen p-4 sm:p-6 lg:p-8">
+      {/* Low Balance Alert */}
       {isLowBalance && (
-        <Alert className="border-destructive bg-destructive/10">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription className="font-medium">
-            <span className="text-destructive">Low balance warning:</span> You have {creditData.currencySymbol}{creditData.balance.toFixed(2)} remaining (approx. {Math.floor(creditData.balance / creditData.averageCallCost)} calls). 
-            <Button variant="link" className="text-destructive font-medium p-0 ml-1 h-auto">
-              Top up now to continue service
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <div className="bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border border-red-500/20 rounded-2xl p-4 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-red-400 font-semibold text-sm">Low Balance Alert</h4>
+              <p className="text-slate-400 text-sm">Your credit balance is below ${lowBalanceThreshold}. Top up to continue using Voice AI services.</p>
+            </div>
+            <button className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+              Top Up Now
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">
-            {client.business_name} Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            {isClient 
-              ? "Monitor your AI assistant performance and manage your business"
-              : `Managing voice AI client: ${client.business_name}`
-            }
-          </p>
-          <div className="flex items-center gap-2 mt-2">
-            <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
-              {client.status}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              Client ID: {client.client_id}
-            </span>
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <h2 className="text-3xl font-bold text-white">{clientName}</h2>
+              {client?.status && (
+                <span className={`px-3 py-1 ${
+                  client.status === 'active' 
+                    ? 'bg-green-500/10 text-green-400 border-green-500/20' 
+                    : 'bg-slate-500/10 text-slate-400 border-slate-500/20'
+                } border rounded-full text-xs font-medium capitalize`}>
+                  {client.status}
+                </span>
+              )}
+              {client?.client_id && (
+                <span className="px-3 py-1 bg-slate-800/50 text-slate-400 border border-slate-700/50 rounded-full text-xs font-medium">
+                  ID: {client.client_id}
+                </span>
+              )}
+            </div>
+            <p className="text-slate-400">
+              {isClient && "24/7 Voice AI Services"}
+              {isAdmin && "Administrative dashboard"}
+              {isTeamMember && "Team member access"}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={handleTestCall}
+              className="flex items-center gap-2 bg-violet-500/10 hover:bg-violet-500/20 text-violet-400 px-4 py-2 rounded-lg border border-violet-500/20 transition-all"
+            >
+              <Play className="w-4 h-4" />
+              <span className="font-medium">Test Call</span>
+            </button>
+            <button 
+              onClick={handleCustomerData}
+              className="flex items-center gap-2 bg-slate-800/50 hover:bg-slate-800 text-slate-300 px-4 py-2 rounded-lg border border-slate-700/50 transition-all"
+            >
+              <Users className="w-4 h-4" />
+              <span className="font-medium">Call History</span>
+            </button>
+            {isInternal && (
+              <button 
+                onClick={handleSystemSettings}
+                className="flex items-center gap-2 bg-slate-800/50 hover:bg-slate-800 text-slate-300 px-4 py-2 rounded-lg border border-slate-700/50 transition-all"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={handleTestCall}>
-            <Play className="mr-2 h-4 w-4" />
-            Test Call
-          </Button>
-          <Button size="sm" onClick={handleCustomerData}>
-            <Users className="mr-2 h-4 w-4" />
-            {isClient ? "Call History" : "Customer Data"}
-          </Button>
-          {isInternal && (
-            <Button variant="outline" size="sm" onClick={handleSystemSettings}>
-              <Settings className="mr-2 h-4 w-4" />
-              System Settings
-            </Button>
-          )}
+      </div>
+
+      {/* Top Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Credit Balance */}
+        <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6 hover:border-violet-500/30 transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-400 text-sm font-medium">Credit Balance</span>
+            <div className={`flex items-center gap-1 text-xs font-medium ${isLowBalance ? 'text-red-400' : 'text-green-400'}`}>
+              {isLowBalance ? <AlertCircle className="w-3 h-3" /> : <CheckCircle className="w-3 h-3" />}
+            </div>
+          </div>
+          <div className="text-3xl font-bold text-white mb-1">{currency}{creditData.balance.toFixed(2)}</div>
+          <div className="text-slate-400 text-sm mb-4">~{creditData.callsRemaining} calls remaining</div>
+          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full ${isLowBalance ? 'bg-red-500' : 'bg-gradient-to-r from-violet-500 to-purple-600'}`} style={{width: `${Math.min(balancePercentage, 100)}%`}}></div>
+          </div>
+        </div>
+
+        {/* Calls This Month */}
+        <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6 hover:border-violet-500/30 transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-400 text-sm font-medium">Calls This Month</span>
+            <div className="flex items-center gap-1 text-xs font-medium text-green-400">
+              <TrendingUp className="w-3 h-3" />
+              12%
+            </div>
+          </div>
+          <div className="flex items-baseline gap-2 mb-4">
+            <div className="text-3xl font-bold text-white">{creditData.callsThisMonth}</div>
+            <Phone className="w-5 h-5 text-violet-400" />
+          </div>
+          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-600 rounded-full" style={{width: `${Math.min(callsPercentage, 100)}%`}}></div>
+          </div>
+        </div>
+
+        {/* Calls Remaining */}
+        <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6 hover:border-violet-500/30 transition-all">
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-slate-400 text-sm font-medium">Calls Remaining</span>
+            <Clock className="w-5 h-5 text-slate-400" />
+          </div>
+          <div className="text-3xl font-bold text-white mb-1">{creditData.callsRemaining}</div>
+          <div className="text-slate-400 text-sm mb-4">Based on current balance</div>
+          <div className="w-full h-1 bg-slate-800 rounded-full overflow-hidden">
+            <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full" style={{width: `${Math.min(balancePercentage, 100)}%`}}></div>
+          </div>
         </div>
       </div>
 
-      {/* Live Demo Section - Only for clients */}
-      {isClient && <LiveDemoSection />}
 
-      {/* Metrics Grid */}
-      <div className="grid gap-4 md:grid-cols-3 animate-fade-in">
-        <MetricsCard
-          title="Credit Balance"
-          value={`${creditData.currencySymbol}${creditData.balance.toFixed(2)}`}
-          subtitle={`≈ ${Math.floor(creditData.balance / 2.00)} calls remaining`}
-          icon={DollarSign}
-          changeType={isLowBalance ? "negative" : "positive"}
-        />
-        <MetricsCard
-          title="Calls This Month"
-          value={creditData.callsThisMonth.toLocaleString()}
-          change="+12%"
-          changeType="positive"
-          icon={Phone}
-          subtitle="vs last month"
-        />
-        <MetricsCard
-          title="Calls Remaining"
-          value={Math.floor(creditData.balance / 2.00).toLocaleString()}
-          subtitle="at $2.00 per call"
-          icon={Clock}
-        />
+
+      {/* Live Call Monitor */}
+      <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6 mb-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+              <Activity className="w-5 h-5 text-green-400 animate-pulse" />
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-lg">Live Call Monitoring</h3>
+              <p className="text-slate-400 text-sm">Real-time active calls with AI sentiment analysis</p>
+            </div>
+          </div>
+        </div>
+        <LiveCallMonitor clientId={client?.client_id} />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Credit Balance & Usage */}
-        <Card className="lg:col-span-2 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-50" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                <CreditCard className="h-5 w-5 text-primary" />
-              </div>
-              Credit Balance
-              {isLowBalance && <Badge variant="destructive" className="text-xs animate-pulse">Low Balance</Badge>}
-            </CardTitle>
-            <CardDescription>
-              Your current credit balance and call usage
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6 relative">
-            {/* Credit Balance Display */}
-            <div className="text-center p-8 rounded-xl border bg-gradient-to-br from-primary/5 to-transparent relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="relative">
-                <div className="text-5xl font-bold bg-gradient-to-br from-primary via-primary to-primary/70 bg-clip-text text-transparent mb-3">
-                  {creditData.currencySymbol}{creditData.balance.toFixed(2)}
-                </div>
-                <div className="text-lg text-muted-foreground mb-1">{creditData.currency}</div>
-                <div className="text-sm text-muted-foreground">
-                  Approximately <span className="font-semibold text-primary">{Math.floor(creditData.balance / creditData.averageCallCost)} calls</span> remaining at {creditData.currencySymbol}{creditData.averageCallCost}/call
-                </div>
-              </div>
-            </div>
-
-            {/* Usage Overview */}
-            <div className="space-y-4 relative">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <span className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    Monthly Usage
-                  </span>
-                  <span className="text-primary">{creditData.callsThisMonth} calls ({creditData.currencySymbol}{(creditData.callsThisMonth * creditData.averageCallCost).toFixed(2)})</span>
-                </div>
-                <div className="relative">
-                  <Progress value={callsUsedPercentage} className="h-3" />
-                  <div 
-                    className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500"
-                    style={{ width: `${callsUsedPercentage}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {callsUsedPercentage.toFixed(1)}% of projected monthly usage
-                </p>
-              </div>
-              
-              <div className="flex items-center justify-between pt-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">Pay As You Go</p>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">Credit System</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ${creditData.averageCallCost}/call
-                    </span>
-                  </div>
-                </div>
-                <div className="space-x-2">
-                  {isClient ? (
-                    <>
-                      <Button variant="outline" size="sm">
-                        View Usage History
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        className={isLowBalance ? "bg-destructive hover:bg-destructive/90" : ""}
-                      >
-                        Top Up Credits
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      {/* Future: Credit Management functionality */}
-                      {/*
-                      <Button variant="outline" size="sm">
-                        Manage Credits
-                      </Button>
-                      */}
-                      <Button size="sm">
-                        View All Clients
-                      </Button>
-                    </>
+      {/* Recent Activity */}
+      <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-white font-bold text-lg">Recent Activity</h3>
+          <button className="text-violet-400 hover:text-violet-300 text-sm font-medium transition-colors">
+            View All
+          </button>
+        </div>
+        
+        <div className="space-y-3">
+          {(isClient ? [
+            { id: 1, type: 'call', message: 'Call completed successfully', cost: '$2.00', time: '5 min ago', status: 'success' },
+            { id: 2, type: 'credit', message: 'Credit top-up - $100.00', time: '2 hours ago', status: 'info' },
+            { id: 3, type: 'test', message: 'Test call executed', time: '3 hours ago', status: 'info' },
+            { id: 4, type: 'warning', message: 'Low balance warning', time: '1 day ago', status: 'warning' },
+          ] : [
+            { id: 5, type: 'system', message: 'System health check completed', time: '10 min ago', status: 'info' },
+            { id: 6, type: 'call', message: 'Client call processed', time: '15 min ago', status: 'success' },
+          ]).map((activity) => (
+            <div key={activity.id} className="flex items-start gap-3 p-3 bg-slate-800/30 rounded-xl hover:bg-slate-800/50 transition-all">
+              <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                activity.status === 'success' ? 'bg-green-400' :
+                activity.status === 'warning' ? 'bg-yellow-400' :
+                'bg-blue-400'
+              }`}></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-medium mb-1">{activity.message}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 text-xs">{activity.time}</span>
+                  {activity.cost && (
+                    <span className="text-violet-400 text-xs font-medium">{activity.cost}</span>
                   )}
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                <Activity className="h-5 w-5 text-primary" />
-              </div>
-              Quick Actions
-            </CardTitle>
-            <CardDescription>
-              {isClient ? "Manage your AI agent" : "Test and manage AI agents"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 relative">
-            <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleTestCall}>
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                <Play className="h-4 w-4 text-primary" />
-              </div>
-              Make Test Call
-            </Button>
-            <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleCustomerData}>
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                <Users className="h-4 w-4 text-primary" />
-              </div>
-              {isClient ? "View Call History" : "View Customer Data"}
-            </Button>
-            {isInternal && (
-              <Button className="w-full justify-start group relative overflow-hidden" variant="outline">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                  <Calendar className="h-4 w-4 text-primary" />
-                </div>
-                Schedule Maintenance
-              </Button>
-            )}
-            {/* Future: Credit Management functionality */}
-            {/*
-            <Button className="w-full justify-start" variant="outline">
-              <CreditCard className="mr-2 h-4 w-4" />
-              {isClient ? "Top Up Credits" : "Credit Management"}
-            </Button>
-            */}
-            {isInternal && (
-              <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleSystemSettings}>
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                  <Activity className="h-4 w-4 text-primary" />
-                </div>
-                System Health
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Business Information Section - Only for clients */}
-        {isClient && <BusinessInfoSection />}
-
-        {/* Live Call Monitor - Shows active calls with sentiment analysis */}
-        <Card className="lg:col-span-3 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-50" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-75" />
-                <div className="relative p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                  <Activity className="h-5 w-5 text-primary" />
-                </div>
-              </div>
-              Live Call Monitoring
-            </CardTitle>
-            <CardDescription>
-              Real-time call tracking with AI sentiment analysis
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="relative">
-            <LiveCallMonitor clientId={client?.client_id} />
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity */}
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>
-              {isClient ? "Your recent calls and account activity" : "Latest calls and system events"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {(isClient ? [
-                { time: "2 min ago", event: "Incoming call handled - $2.00 deducted", status: "success" },
-                { time: "8 min ago", event: "Test call completed", status: "success" },
-                { time: "15 min ago", event: "Credits topped up - $50.00 added", status: "info" },
-                { time: "32 min ago", event: "Low balance warning sent", status: "warning" },
-                { time: "1 hour ago", event: "Call completed - $2.00 deducted", status: "success" },
-              ] : [
-                { time: "2 min ago", event: "Incoming call handled", status: "success" },
-                { time: "8 min ago", event: "Test call completed", status: "success" },
-                { time: "15 min ago", event: "Customer data updated", status: "info" },
-                { time: "32 min ago", event: "New client onboarded", status: "info" },
-                { time: "1 hour ago", event: "System maintenance completed", status: "success" },
-              ]).map((activity, index) => (
-                <div key={index} className="flex items-center space-x-4 text-sm">
-                  <div className={`w-2 h-2 rounded-full ${
-                    activity.status === "success" ? "bg-green-500" : 
-                    activity.status === "info" ? "bg-blue-500" : 
-                    activity.status === "warning" ? "bg-yellow-500" : "bg-gray-400"
-                  }`} />
-                  <div className="flex-1 space-y-1">
-                    <p>{activity.event}</p>
-                    <p className="text-muted-foreground text-xs">{activity.time}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
       </div>
     </div>
   );
