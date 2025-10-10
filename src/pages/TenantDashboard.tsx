@@ -186,13 +186,13 @@ export default function Dashboard() {
       {isClient && <LiveDemoSection />}
 
       {/* Metrics Grid */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 animate-fade-in">
         <MetricsCard
           title="Credit Balance"
-          value={`${creditData.currencySymbol}${creditData.balance.toFixed(2)} ${creditData.currency}`}
+          value={`${creditData.currencySymbol}${creditData.balance.toFixed(2)}`}
           subtitle={`≈ ${Math.floor(creditData.balance / 2.00)} calls remaining`}
           icon={DollarSign}
-          changeType={isLowBalance ? "negative" : undefined}
+          changeType={isLowBalance ? "negative" : "positive"}
         />
         <MetricsCard
           title="Calls This Month"
@@ -212,35 +212,52 @@ export default function Dashboard() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Credit Balance & Usage */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
+        <Card className="lg:col-span-2 relative overflow-hidden group">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-50" />
+          <CardHeader className="relative">
             <CardTitle className="flex items-center gap-2">
+              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+                <CreditCard className="h-5 w-5 text-primary" />
+              </div>
               Credit Balance
-              {isLowBalance && <Badge variant="destructive" className="text-xs">Low Balance</Badge>}
+              {isLowBalance && <Badge variant="destructive" className="text-xs animate-pulse">Low Balance</Badge>}
             </CardTitle>
             <CardDescription>
               Your current credit balance and call usage
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-6 relative">
             {/* Credit Balance Display */}
-            <div className="text-center p-6 bg-card/50 rounded-lg border">
-              <div className="text-3xl font-light text-foreground mb-2">
-                {creditData.currencySymbol}{creditData.balance.toFixed(2)} {creditData.currency}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Approximately {Math.floor(creditData.balance / creditData.averageCallCost)} calls remaining at {creditData.currencySymbol}{creditData.averageCallCost}/call
+            <div className="text-center p-8 rounded-xl border bg-gradient-to-br from-primary/5 to-transparent relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="relative">
+                <div className="text-5xl font-bold bg-gradient-to-br from-primary via-primary to-primary/70 bg-clip-text text-transparent mb-3">
+                  {creditData.currencySymbol}{creditData.balance.toFixed(2)}
+                </div>
+                <div className="text-lg text-muted-foreground mb-1">{creditData.currency}</div>
+                <div className="text-sm text-muted-foreground">
+                  Approximately <span className="font-semibold text-primary">{Math.floor(creditData.balance / creditData.averageCallCost)} calls</span> remaining at {creditData.currencySymbol}{creditData.averageCallCost}/call
+                </div>
               </div>
             </div>
 
             {/* Usage Overview */}
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span>Monthly Usage</span>
-                  <span>{creditData.callsThisMonth} calls ({creditData.currencySymbol}{(creditData.callsThisMonth * creditData.averageCallCost).toFixed(2)})</span>
+            <div className="space-y-4 relative">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm font-medium">
+                  <span className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                    Monthly Usage
+                  </span>
+                  <span className="text-primary">{creditData.callsThisMonth} calls ({creditData.currencySymbol}{(creditData.callsThisMonth * creditData.averageCallCost).toFixed(2)})</span>
                 </div>
-                <Progress value={callsUsedPercentage} className="h-2" />
+                <div className="relative">
+                  <Progress value={callsUsedPercentage} className="h-3" />
+                  <div 
+                    className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500"
+                    style={{ width: `${callsUsedPercentage}%` }}
+                  />
+                </div>
                 <p className="text-xs text-muted-foreground">
                   {callsUsedPercentage.toFixed(1)}% of projected monthly usage
                 </p>
@@ -289,25 +306,40 @@ export default function Dashboard() {
         </Card>
 
         {/* Quick Actions */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
+        <Card className="relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl" />
+          <CardHeader className="relative">
+            <CardTitle className="flex items-center gap-2">
+              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+                <Activity className="h-5 w-5 text-primary" />
+              </div>
+              Quick Actions
+            </CardTitle>
             <CardDescription>
               {isClient ? "Manage your AI agent" : "Test and manage AI agents"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <Button className="w-full justify-start" variant="outline" onClick={handleTestCall}>
-              <Play className="mr-2 h-4 w-4" />
+          <CardContent className="space-y-3 relative">
+            <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleTestCall}>
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
+                <Play className="h-4 w-4 text-primary" />
+              </div>
               Make Test Call
             </Button>
-            <Button className="w-full justify-start" variant="outline" onClick={handleCustomerData}>
-              <Users className="mr-2 h-4 w-4" />
+            <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleCustomerData}>
+              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+              <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
+                <Users className="h-4 w-4 text-primary" />
+              </div>
               {isClient ? "View Call History" : "View Customer Data"}
             </Button>
             {isInternal && (
-              <Button className="w-full justify-start" variant="outline">
-                <Calendar className="mr-2 h-4 w-4" />
+              <Button className="w-full justify-start group relative overflow-hidden" variant="outline">
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
+                  <Calendar className="h-4 w-4 text-primary" />
+                </div>
                 Schedule Maintenance
               </Button>
             )}
@@ -319,8 +351,11 @@ export default function Dashboard() {
             </Button>
             */}
             {isInternal && (
-              <Button className="w-full justify-start" variant="outline" onClick={handleSystemSettings}>
-                <Activity className="mr-2 h-4 w-4" />
+              <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleSystemSettings}>
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
+                  <Activity className="h-4 w-4 text-primary" />
+                </div>
                 System Health
               </Button>
             )}
@@ -331,14 +366,23 @@ export default function Dashboard() {
         {isClient && <BusinessInfoSection />}
 
         {/* Live Call Monitor - Shows active calls with sentiment analysis */}
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Live Call Monitoring</CardTitle>
+        <Card className="lg:col-span-3 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-50" />
+          <CardHeader className="relative">
+            <CardTitle className="flex items-center gap-2">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-75" />
+                <div className="relative p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
+                  <Activity className="h-5 w-5 text-primary" />
+                </div>
+              </div>
+              Live Call Monitoring
+            </CardTitle>
             <CardDescription>
               Real-time call tracking with AI sentiment analysis
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative">
             <LiveCallMonitor clientId={client?.client_id} />
           </CardContent>
         </Card>

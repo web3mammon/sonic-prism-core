@@ -50,16 +50,28 @@ All colors MUST be HSL.
     /* Custom gradients and effects */
     --gradient-primary: linear-gradient(135deg, hsl(263 70% 50.4%), hsl(250 80% 60%));
     --gradient-card: linear-gradient(145deg, hsl(240 10% 3.9%), hsl(240 8% 6%));
+    --gradient-card-light: linear-gradient(145deg, hsl(263 95% 98%), hsl(250 100% 99%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(142 76% 46%));
+    --gradient-warning: linear-gradient(135deg, hsl(38 92% 50%), hsl(43 96% 56%));
+    --gradient-purple: linear-gradient(135deg, hsl(263 85% 65%), hsl(250 90% 70%));
+    
     --shadow-glow: 0 0 20px hsl(263 70% 50.4% / 0.15);
+    --shadow-purple: 0 4px 20px hsl(263 70% 50.4% / 0.25);
+    --shadow-elevated: 0 8px 30px hsl(263 70% 50.4% / 0.15), 0 2px 8px hsl(263 70% 50.4% / 0.1);
     --shadow-demo: 0 0 40px hsl(263 70% 50.4% / 0.4), 0 0 80px hsl(263 70% 50.4% / 0.2);
     --gradient-demo: linear-gradient(145deg, hsl(263 70% 50.4%), hsl(250 80% 60%), hsl(263 70% 50.4%));
+    
+    /* Glassmorphism */
+    --glass-bg: hsl(0 0% 100% / 0.05);
+    --glass-border: hsl(0 0% 100% / 0.1);
+    --glass-blur: blur(12px);
   }
 
   .dark {
     --background: 240 10% 3%;
     --foreground: 0 0% 98%;
 
-    --card: 240 6% 12%;
+    --card: 240 6% 10%;
     --card-foreground: 0 0% 98%;
 
     --popover: 222.2 84% 4.9%;
@@ -101,6 +113,40 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .card-elevated {
+    box-shadow: var(--shadow-elevated);
+  }
+  
+  .card-glass {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: var(--glass-blur);
+  }
+  
+  .gradient-border {
+    position: relative;
+  }
+  
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: var(--gradient-primary);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .gradient-border:hover::before {
+    opacity: 1;
   }
 }
 
