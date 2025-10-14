@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.test-voice-call]
 verify_jwt = true
+
+[functions.sms-handler]
+verify_jwt = false
