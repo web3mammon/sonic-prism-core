@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.4';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,163 +7,138 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { call_sid, transcript, client_id } = await req.json();
-
-    console.log('Agent transfer request:', { call_sid, client_id });
-
-    // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Check if transcript contains transfer keywords
+    const { call_sid, transcript, client_id } = await req.json();
+
+    console.log('Agent transfer request:', { call_sid, client_id, transcript: transcript?.substring(0, 100) });
+
+    if (!call_sid || !client_id) {
+      return new Response(
+        JSON.stringify({ error: 'Missing required fields: call_sid, client_id' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check transcript for transfer keywords
     const transferKeywords = [
-      'transfer',
-      'speak to someone',
-      'talk to human',
-      'real person',
-      'agent',
-      'representative',
-      'manager',
-      'supervisor',
-      'help me',
-      'live person'
+      'transfer', 'speak to someone', 'talk to a person', 'human', 
+      'agent', 'representative', 'real person', 'live person',
+      'speak to agent', 'talk to agent', 'escalate'
     ];
 
     const transcriptLower = (transcript || '').toLowerCase();
-    const containsTransferKeyword = transferKeywords.some(keyword => 
+    const hasTransferIntent = transferKeywords.some(keyword => 
       transcriptLower.includes(keyword)
     );
 
+    let transferReason = 'Customer requested transfer';
+    if (hasTransferIntent) {
+      const matchedKeyword = transferKeywords.find(keyword => transcriptLower.includes(keyword));
+      transferReason = `Customer used keyword: "${matchedKeyword}"`;
+    }
+
     // Query voice_ai_clients for transfer number
-    const { data: client, error: clientError } = await supabase
+    const { data: clientData, error: clientError } = await supabase
       .from('voice_ai_clients')
       .select('call_transfer_number, call_transfer_enabled, business_name')
       .eq('client_id', client_id)
       .single();
 
-    if (clientError) {
+    if (clientError || !clientData) {
       console.error('Error fetching client:', clientError);
-      throw new Error('Client not found');
-    }
-
-    // Check if transfer is enabled and number is configured
-    if (!client.call_transfer_enabled) {
-      console.log('Call transfer not enabled for client:', client_id);
       return new Response(
-        JSON.stringify({ 
-          error: 'Call transfer not enabled',
-          shouldTransfer: false 
-        }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200
-        }
+        JSON.stringify({ error: 'Client not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (!client.call_transfer_number) {
-      console.log('No transfer number configured for client:', client_id);
+    // Check if transfer is enabled and number exists
+    if (!clientData.call_transfer_enabled || !clientData.call_transfer_number) {
+      console.log('Transfer not enabled or number not set for client:', client_id);
+      
+      // Log failed transfer attempt
+      await supabase.from('agent_transfers').insert({
+        call_sid,
+        client_id,
+        transcript,
+        transfer_number: clientData.call_transfer_number || 'NOT_SET',
+        transfer_reason: 'Transfer not enabled or number not configured',
+        status: 'failed',
+        metadata: {
+          transfer_enabled: clientData.call_transfer_enabled,
+          has_number: !!clientData.call_transfer_number
+        }
+      });
+
       return new Response(
         JSON.stringify({ 
-          error: 'No transfer number configured',
-          shouldTransfer: false 
+          error: 'Transfer not available',
+          message: 'Call transfer is not enabled for this client or transfer number is not configured'
         }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          status: 200
-        }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Determine transfer reason
-    let transferReason = 'customer_requested';
-    if (transcriptLower.includes('emergency')) {
-      transferReason = 'emergency';
-    } else if (transcriptLower.includes('manager') || transcriptLower.includes('supervisor')) {
-      transferReason = 'escalation';
-    }
+    const transferNumber = clientData.call_transfer_number;
 
-    // Log the transfer to agent_transfers table
-    const { error: insertError } = await supabase
+    // Log the transfer
+    const { error: logError } = await supabase
       .from('agent_transfers')
       .insert({
         call_sid,
         client_id,
-        transcript: transcript || '',
-        transfer_number: client.call_transfer_number,
+        transcript,
+        transfer_number: transferNumber,
         transfer_reason: transferReason,
         status: 'initiated',
         metadata: {
-          contains_keyword: containsTransferKeyword,
-          business_name: client.business_name,
-          timestamp: new Date().toISOString()
+          business_name: clientData.business_name,
+          has_transfer_intent: hasTransferIntent
         }
       });
 
-    if (insertError) {
-      console.error('Error logging transfer:', insertError);
+    if (logError) {
+      console.error('Error logging transfer:', logError);
     }
 
-    // Generate TwiML response to transfer the call
+    // Generate TwiML response
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">Transferring you to an agent now. Please hold.</Say>
-  <Dial>${escapeXml(client.call_transfer_number)}</Dial>
+  <Say>Transferring you to an agent now. Please hold.</Say>
+  <Dial timeout="30" callerId="${transferNumber}">
+    <Number>${transferNumber}</Number>
+  </Dial>
+  <Say>The agent is not available at the moment. Please try again later or leave a message.</Say>
 </Response>`;
 
-    console.log('Transfer initiated to:', client.call_transfer_number);
+    console.log('Transfer initiated to:', transferNumber);
 
-    return new Response(
-      twiml,
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'text/xml' 
-        },
-        status: 200
+    return new Response(twiml, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'text/xml',
       }
-    );
+    });
 
   } catch (error) {
     console.error('Error in agent-transfer function:', error);
-    
-    // Return error TwiML
-    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="alice">I'm sorry, but I'm unable to transfer your call at this time. Please try again later.</Say>
-  <Hangup/>
-</Response>`;
-
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
-      errorTwiml,
+      JSON.stringify({ error: errorMessage }),
       { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'text/xml' 
-        },
-        status: 200
+        status: 500, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
 });
-
-// Helper function to escape XML special characters
-function escapeXml(unsafe: string): string {
-  return unsafe.replace(/[<>&'"]/g, (c) => {
-    switch (c) {
-      case '<': return '&lt;';
-      case '>': return '&gt;';
-      case '&': return '&amp;';
-      case '\'': return '&apos;';
-      case '"': return '&quot;';
-      default: return c;
-    }
-  });
-}
