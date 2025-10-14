@@ -33,6 +33,7 @@ import {
 import { VoiceAIDashboard } from "@/components/voice-ai/VoiceAIDashboard";
 import { LiveCallMonitor } from "@/components/voice-ai/LiveCallMonitor";
 import { VoiceAIStats } from "@/components/voice-ai/VoiceAIStats";
+import { supabase } from "@/integrations/supabase/client";
 
 const CentralHQ = () => {
   const { hasRole } = useAuth();
@@ -55,42 +56,63 @@ const CentralHQ = () => {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // API base URL (Central HQ running on port 3000)
-  const API_BASE = 'http://localhost:3000/api';
-
-  // Fetch data from Central HQ API
+  // Fetch data from Supabase
   const fetchData = async () => {
     try {
       setLoading(true);
 
-      // Fetch system stats
-      const statsResponse = await fetch(`${API_BASE}/stats`);
-      const stats = await statsResponse.json();
+      // Fetch all clients from voice_ai_clients table
+      const { data: clientsData, error: clientsError } = await supabase
+        .from('voice_ai_clients')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (clientsError) throw clientsError;
+
+      setClients(clientsData || []);
+
+      // Count active clients (status = 'active')
+      const activeCount = (clientsData || []).filter(c => c.status === 'active').length;
+
+      // Fetch today's calls
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
+      const { data: callsData, error: callsError } = await supabase
+        .from('call_sessions')
+        .select('*')
+        .gte('created_at', today.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (callsError) throw callsError;
+
+      const callsToday = callsData?.length || 0;
+      
+      // Calculate total revenue today
+      const revenueToday = (callsData || []).reduce((sum, call) => sum + (parseFloat(String(call.cost_amount || 0)) || 0), 0);
+
       // Calculate system load based on active clients
-      const systemLoad = Math.min(Math.round((stats.active_clients / Math.max(stats.total_clients, 1)) * 100), 100);
+      const systemLoad = Math.min(Math.round((activeCount / Math.max(clientsData?.length || 1, 1)) * 100), 100);
       
       setSystemMetrics({
-        totalClients: stats.total_clients || 0,
-        activeClients: stats.active_clients || 0,
+        totalClients: clientsData?.length || 0,
+        activeClients: activeCount,
         systemLoad: systemLoad,
-        uptime: "99.9%", // Static for now
-        totalCalls: stats.calls_today || 0,
-        avgResponseTime: "1.2s", // Static for now
-        callsToday: stats.calls_today || 0,
-        revenueToday: stats.revenue_today || 0
+        uptime: "99.9%",
+        totalCalls: callsToday,
+        avgResponseTime: "1.2s",
+        callsToday: callsToday,
+        revenueToday: revenueToday
       });
 
-      // Fetch clients
-      const clientsResponse = await fetch(`${API_BASE}/clients`);
-      const clientsData = await clientsResponse.json();
-      setClients(clientsData.clients || []);
+      // Fetch recent calls for display
+      const { data: recentCallsData } = await supabase
+        .from('call_sessions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-      // Fetch recent calls
-      const callsResponse = await fetch(`${API_BASE}/calls?limit=10`);
-      const callsData = await callsResponse.json();
-      setRecentCalls(callsData.calls || []);
-
+      setRecentCalls(recentCallsData || []);
       setLastRefresh(new Date());
     } catch (error) {
       console.error('Error fetching data:', error);

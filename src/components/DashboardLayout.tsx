@@ -25,12 +25,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   
   // Determine the header title based on context
   const getHeaderTitle = () => {
+    // Central HQ should always show "Central HQ"
+    if (isOnCentralHQ) {
+      return 'Central HQ';
+    }
     if (isValid) {
       return `${displayName} Dashboard`;
-    }
-    // For clients on Central HQ page, show their business name if available
-    if (isOnCentralHQ && profile?.business_name) {
-      return `${profile.business_name} Dashboard`;
     }
     return 'Central HQ';
   };
@@ -39,6 +39,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   // Set browser tab title based on the same logic as header title
   const getBrowserTitle = () => {
+    // Central HQ should always show "Central HQ"
+    if (isOnCentralHQ) {
+      return 'Klariqo - Central HQ';
+    }
+    
     // Wait for client data to load before setting dynamic title
     if (clientLoading) {
       return 'Klariqo - AI Phone Agent';
@@ -46,10 +51,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
     if (isValid && displayName) {
       return `${displayName} AI Dashboard`;
-    }
-    // For clients on Central HQ page, show their business name if available
-    if (isOnCentralHQ && profile?.business_name) {
-      return `${profile.business_name} AI Dashboard`;
     }
     return 'Klariqo - AI Phone Agent';
   };
