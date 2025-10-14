@@ -17,8 +17,15 @@ import {
   Mail, 
   Save,
   Edit3,
-  CheckCircle
+  CheckCircle,
+  PhoneForwarded
 } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export default function BusinessDetails() {
   const { profile } = useAuth();
@@ -38,7 +45,8 @@ export default function BusinessDetails() {
     businessHours: "",
     servicesOffered: "",
     emergencyFee: "",
-    serviceFee: ""
+    serviceFee: "",
+    callTransferNumber: ""
   });
 
   // Initialize form data when profile and client data are available
@@ -54,7 +62,8 @@ export default function BusinessDetails() {
         businessHours: (profile as any)?.business_hours || "",
         servicesOffered: (profile as any)?.services_offered || "",
         emergencyFee: (profile as any)?.emergency_fee || "",
-        serviceFee: (profile as any)?.service_fee || ""
+        serviceFee: (profile as any)?.service_fee || "",
+        callTransferNumber: client?.call_transfer_number || ""
       });
       setDataLoaded(true);
     }
@@ -73,7 +82,7 @@ export default function BusinessDetails() {
     setIsSaving(true);
     try {
       // Update user profile with business details
-      const { error } = await supabase
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           business_name: formData.businessName,
@@ -89,8 +98,24 @@ export default function BusinessDetails() {
         })
         .eq('id', profile.id);
 
-      if (error) {
-        throw error;
+      if (profileError) {
+        throw profileError;
+      }
+
+      // Update voice_ai_clients with transfer number if client exists
+      if (client) {
+        const { error: clientError } = await supabase
+          .from('voice_ai_clients')
+          .update({
+            call_transfer_number: formData.callTransferNumber || null,
+            call_transfer_enabled: !!formData.callTransferNumber,
+            updated_at: new Date().toISOString()
+          })
+          .eq('client_id', client.client_id);
+
+        if (clientError) {
+          throw clientError;
+        }
       }
 
       toast.success("Business details saved successfully!");
@@ -119,7 +144,8 @@ export default function BusinessDetails() {
       businessHours: (profile as any)?.business_hours || "",
       servicesOffered: (profile as any)?.services_offered || "",
       emergencyFee: (profile as any)?.emergency_fee || "",
-      serviceFee: (profile as any)?.service_fee || ""
+      serviceFee: (profile as any)?.service_fee || "",
+      callTransferNumber: client?.call_transfer_number || ""
     });
     setIsEditing(false);
   };
@@ -420,6 +446,40 @@ export default function BusinessDetails() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <TooltipProvider>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="callTransferNumber" className="flex items-center gap-1">
+                    <PhoneForwarded className="h-4 w-4" />
+                    Transfer to Number
+                  </Label>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="h-4 w-4 rounded-full border border-muted-foreground/50 flex items-center justify-center text-xs text-muted-foreground cursor-help">
+                        ?
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs">
+                      <p>When customers request to speak with a human agent, the AI will transfer calls to this number. Leave empty to disable call transfers.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </TooltipProvider>
+              {isEditing ? (
+                <Input
+                  id="callTransferNumber"
+                  type="tel"
+                  value={formData.callTransferNumber}
+                  onChange={(e) => handleInputChange("callTransferNumber", e.target.value)}
+                  placeholder="+61412345678"
+                />
+              ) : (
+                <div className="p-2 bg-muted rounded text-sm">
+                  {formData.callTransferNumber || "Not configured - transfers disabled"}
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

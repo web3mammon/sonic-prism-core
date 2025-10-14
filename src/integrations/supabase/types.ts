@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_transfers: {
+        Row: {
+          call_sid: string
+          client_id: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          status: string
+          transcript: string | null
+          transfer_number: string
+          transfer_reason: string | null
+        }
+        Insert: {
+          call_sid: string
+          client_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          status?: string
+          transcript?: string | null
+          transfer_number: string
+          transfer_reason?: string | null
+        }
+        Update: {
+          call_sid?: string
+          client_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          status?: string
+          transcript?: string | null
+          transfer_number?: string
+          transfer_reason?: string | null
+        }
+        Relationships: []
+      }
       audio_files: {
         Row: {
           client_id: string

@@ -14,3 +14,6 @@ verify_jwt = true
 
 [functions.sms-handler]
 verify_jwt = false
+
+[functions.agent-transfer]
+verify_jwt = false

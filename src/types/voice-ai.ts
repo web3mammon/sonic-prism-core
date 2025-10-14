@@ -11,6 +11,8 @@ export interface VoiceAIClient {
   api_proxy_path?: string;
   status: 'active' | 'inactive' | 'starting' | 'stopping' | 'error';
   phone_number?: string;
+  call_transfer_number?: string;
+  call_transfer_enabled?: boolean;
   config: {
     system_prompt?: string;
     voice_id?: string;
