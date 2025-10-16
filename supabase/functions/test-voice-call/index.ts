@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -6,24 +5,27 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('🔍 [TEST-CALL] Function invoked');
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
     const { clientId, phoneNumber, testScenario } = await req.json();
+    console.log('🔍 [TEST-CALL] Request body:', { clientId, phoneNumber, testScenario });
 
     if (!clientId || !phoneNumber) {
       throw new Error('Missing required fields: clientId and phoneNumber');
     }
 
-    console.log(`Initiating test call for client ${clientId} to ${phoneNumber}`);
+    console.log(`📞 [TEST-CALL] Initiating test call for client ${clientId} to ${phoneNumber}`);
 
     // Get client configuration
     const { data: client, error: clientError } = await supabaseClient
@@ -70,34 +72,24 @@ serve(async (req) => {
       throw new Error(`Failed to create call session: ${sessionError.message}`);
     }
 
-    console.log('Session created:', session.id);
+    console.log('✅ [TEST-CALL] Session created:', session.id);
 
-    // Get the WebSocket URL for voice streaming
+    // Don't create TwiML here! Use the SAME webhook endpoint as real calls
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
-    const wsUrl = `wss://${new URL(SUPABASE_URL!).hostname.replace('.supabase.co', '.functions.supabase.co')}/voice-websocket?client_id=${clientId}&call_sid=${callSid}`;
+    const webhookUrl = `${SUPABASE_URL}/functions/v1/twilio-webhook/voice`;
 
-    // Create TwiML with WebSocket stream for voice AI pipeline
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say voice="Polly.Joanna">This is a test call. Connecting you to the AI assistant.</Say>
-  <Connect>
-    <Stream url="${wsUrl}">
-      <Parameter name="client_id" value="${clientId}" />
-      <Parameter name="call_sid" value="${callSid}" />
-    </Stream>
-  </Connect>
-</Response>`;
+    console.log('🔗 [TEST-CALL] Will use webhook URL:', webhookUrl);
 
-    // Initiate outbound call via Twilio
+    // Initiate outbound call via Twilio - point to our REAL webhook
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Calls.json`;
     const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
 
     const formData = new URLSearchParams({
       From: client.phone_number,
       To: phoneNumber,
-      Twiml: twiml,
-      StatusCallback: `${SUPABASE_URL}/functions/v1/twilio-webhook/status`,
-      StatusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'].join(','),
+      Url: webhookUrl,  // Use Url (not Twiml) to point to our webhook
+      Method: 'POST',
+      // No StatusCallback - FastAPI doesn't use it either
     });
 
     console.log('Making Twilio API call from', client.phone_number, 'to', phoneNumber);
@@ -117,7 +109,7 @@ serve(async (req) => {
     }
 
     const callData = await twilioResponse.json();
-    console.log('Twilio call initiated successfully. SID:', callData.sid);
+    console.log('✅ [TEST-CALL] Twilio call initiated successfully. SID:', callData.sid);
 
     // Update session with actual Twilio call SID
     await supabaseClient
@@ -133,13 +125,15 @@ serve(async (req) => {
       })
       .eq('id', session.id);
 
+    console.log('📊 [TEST-CALL] Session updated with Twilio SID');
+
     return new Response(
       JSON.stringify({
         success: true,
         callSid: callData.sid,
         sessionId: session.id,
-        message: `Test call initiated to ${phoneNumber}. The call will use the full voice AI pipeline: Deepgram STT → GPT → ElevenLabs TTS`,
-        websocketUrl: wsUrl,
+        message: `Test call initiated to ${phoneNumber}. Using the SAME webhook as real calls for full voice AI pipeline.`,
+        webhookUrl: webhookUrl,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

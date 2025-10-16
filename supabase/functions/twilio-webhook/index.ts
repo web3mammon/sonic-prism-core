@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -6,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -50,54 +49,56 @@ serve(async (req) => {
 async function handleVoiceWebhook(req: Request, supabase: any) {
   const formData = await req.formData();
   const params = Object.fromEntries(formData.entries());
-  
+
   console.log('Voice webhook received:', params);
 
   const callSid = params.CallSid as string;
   const from = params.From as string;
   const to = params.To as string;
   const callStatus = params.CallStatus as string;
+  const direction = params.Direction as string; // 'inbound' or 'outbound-api'
 
-  // Find the client by phone number
+  console.log(`Call direction: ${direction}`);
+
+  // Find the client by phone number based on call direction
+  // INBOUND: client phone = To (our number)
+  // OUTBOUND: client phone = From (our number)
+  const lookupNumber = direction === 'outbound-api' ? from : to;
+  console.log(`Looking up client by phone: ${lookupNumber}`);
+
   const { data: client } = await supabase
     .from('voice_ai_clients')
     .select('*')
-    .eq('phone_number', to)
+    .eq('phone_number', lookupNumber)
     .single();
 
   if (!client) {
-    console.error(`No client found for phone number: ${to}`);
+    console.error(`No client found for phone number: ${lookupNumber} (direction: ${direction})`);
     return new Response('<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, this number is not configured.</Say><Hangup/></Response>', {
       headers: { 'Content-Type': 'text/xml' }
     });
   }
 
-  // Create or update call session
-  const { error: sessionError } = await supabase
-    .from('call_sessions')
-    .upsert({
-      client_id: client.client_id,
-      call_sid: callSid,
-      caller_number: from,
-      status: mapTwilioStatus(callStatus),
-      start_time: new Date().toISOString(),
-      transcript: [],
-      metadata: {
-        twilio_params: params,
-        client_config: client.config
-      }
+  console.log(`✅ Client found: ${client.business_name} (${client.client_id})`);
+
+  // DON'T create session in database here - it causes timeout!
+  // FastAPI creates IN-MEMORY session only, WebSocket handler will create DB session
+  console.log(`📞 Generating TwiML for: ${callSid}`);
+
+  try {
+    // Generate TwiML response immediately
+    const twiml = generateTwiMLResponse(client, callSid, from, to, direction);
+    console.log(`✅ TwiML generated successfully`);
+
+    return new Response(twiml, {
+      headers: { 'Content-Type': 'text/xml' }
     });
-
-  if (sessionError) {
-    console.error('Error creating call session:', sessionError);
+  } catch (error) {
+    console.error('Error in voice webhook:', error);
+    return new Response('<?xml version="1.0" encoding="UTF-8"?><Response><Say>Technical error occurred. Please try again.</Say><Hangup/></Response>', {
+      headers: { 'Content-Type': 'text/xml' }
+    });
   }
-
-  // Generate TwiML response based on client configuration
-  const twiml = generateTwiMLResponse(client, callSid);
-
-  return new Response(twiml, {
-    headers: { 'Content-Type': 'text/xml' }
-  });
 }
 
 async function handleStatusWebhook(req: Request, supabase: any) {
@@ -207,18 +208,27 @@ function mapTwilioStatus(twilioStatus: string): string {
   }
 }
 
-function generateTwiMLResponse(client: any, callSid: string): string {
-  const config = client.config || {};
-  const from = ''; // Will be populated by Twilio from call params
-  const to = client.phone_number;
-  
-  // WebSocket URL for bidirectional streaming
-  const streamUrl = `wss://btqccksigmohyjdxgrrj.supabase.co/functions/v1/twilio-voice-webhook?call_sid=${callSid}&caller=${from}&called=${to}`;
-  
-  return `<?xml version="1.0" encoding="UTF-8"?>
+function generateTwiMLResponse(client: any, callSid: string, from: string, to: string, direction: string): string {
+  console.log(`🔧 Generating TwiML - CallSid: ${callSid}, From: ${from}, To: ${to}, Direction: ${direction}`);
+
+  // Use callSid in PATH like FastAPI does, pass other params as Stream parameters
+  const streamUrl = `wss://btqccksigmohyjdxgrrj.supabase.co/functions/v1/twilio-voice-webhook/${callSid}`;
+
+  console.log(`🔗 WebSocket URL: ${streamUrl}`);
+
+  // Use Twilio's Parameter tags to pass additional data (including client_id and direction)
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="${streamUrl}" />
+    <Stream url="${streamUrl}" name="AudioStream">
+      <Parameter name="caller" value="${from}" />
+      <Parameter name="called" value="${to}" />
+      <Parameter name="client_id" value="${client.client_id}" />
+      <Parameter name="direction" value="${direction}" />
+    </Stream>
   </Connect>
 </Response>`;
+
+  console.log(`📄 Generated TwiML`);
+  return twiml;
 }

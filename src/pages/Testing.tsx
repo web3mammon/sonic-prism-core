@@ -21,7 +21,7 @@ export default function Testing() {
   const { client: currentClient } = useCurrentClient();
   const { profile } = useAuth();
 
-  // Real test call using actual voice AI pipeline
+  // Real test call using actual voice AI pipeline via Twilio
   const handleStartTest = async () => {
     if (!testNumber) {
       toast.error("Please enter a test phone number");
@@ -35,52 +35,57 @@ export default function Testing() {
 
     try {
       setIsLoading(true);
+      console.log('🔍 Initiating test call...');
+      console.log('Client ID:', currentClient.client_id);
+      console.log('Phone Number:', testNumber);
+      console.log('Test Scenario:', testScript);
 
-      // Directly insert a test call session in the database
-      const callSid = `TEST_${Date.now()}`;
-      const { data: session, error: sessionError } = await supabase
-        .from('call_sessions')
-        .insert({
-          client_id: currentClient.client_id,
-          call_sid: callSid,
-          caller_number: testNumber,
-          status: 'ringing',
-          metadata: {
-            test_call: true,
-            test_scenario: testScript || 'Manual test',
-            note: 'This is a simulated test entry - actual calls go through Twilio'
-          }
-        })
-        .select()
-        .single();
+      // Call the test-voice-call edge function to make REAL Twilio call
+      const { data: { session } } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        throw new Error(`Failed to create test session: ${sessionError.message}`);
+      const SUPABASE_URL = 'https://btqccksigmohyjdxgrrj.supabase.co';
+      const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0cWNja3NpZ21vaHlqZHhncnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzNDY4MDEsImV4cCI6MjA3MzkyMjgwMX0.kOiOYBO-lro83HMSaCTlnryfRM3Md3pWkdAaYmVHhJ4';
+
+      const response = await fetch(
+        `${SUPABASE_URL}/functions/v1/test-voice-call`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`,
+          },
+          body: JSON.stringify({
+            clientId: currentClient.client_id,
+            phoneNumber: testNumber,
+            testScenario: testScript || 'Manual test call from dashboard',
+          }),
+        }
+      );
+
+      const result = await response.json();
+      console.log('🔍 Test call response:', result);
+
+      if (!response.ok || result.error) {
+        throw new Error(result.error || result.details || 'Failed to initiate test call');
       }
 
-      toast.success(`Test session created! Call SID: ${callSid}. For real voice AI testing, call your Twilio number from ${testNumber}`);
-      console.log('Test session created:', session);
-      
+      toast.success(`📞 Real test call initiated! Call SID: ${result.callSid}`);
+      console.log('✅ Test call initiated successfully');
+      console.log('Call SID:', result.callSid);
+      console.log('Session ID:', result.sessionId);
+      console.log('Webhook URL:', result.webhookUrl);
+      console.log('Message:', result.message);
+
       setIsCallActive(true);
 
-      // Auto-complete after 10 seconds
+      // Auto-complete after 30 seconds (real calls take time)
       setTimeout(async () => {
-        await supabase
-          .from('call_sessions')
-          .update({ 
-            status: 'completed',
-            end_time: new Date().toISOString(),
-            duration_seconds: 10
-          })
-          .eq('id', session.id);
-        
         setIsCallActive(false);
-        toast.info("Test session completed");
-      }, 10000);
+        toast.info("Test call window completed. Check call logs for results.");
+      }, 30000);
 
     } catch (error) {
-      console.error('Test call failed:', error);
+      console.error('❌ Test call failed:', error);
       toast.error(`Test call failed: ${error.message}`);
       setIsCallActive(false);
     } finally {
