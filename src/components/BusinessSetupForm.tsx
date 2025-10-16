@@ -32,7 +32,8 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
   const [showProvisioningOverlay, setShowProvisioningOverlay] = useState(false);
   const [businessName, setBusinessName] = useState('');
   const [businessType, setBusinessType] = useState('');
-  const [serviceFee, setServiceFee] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [region, setRegion] = useState('AU');
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -41,34 +42,15 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
     if (!user) return;
 
     setIsLoading(true);
+    setShowProvisioningOverlay(true);
 
     try {
-      // First, update the user's profile with business information
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          business_name: businessName,
-          business_type: businessType,
-          service_fee: parseFloat(serviceFee),
-          onboarding_completed: true
-        } as any) // Using 'as any' until types are regenerated
-        .eq('user_id', user.id);
-
-      if (profileError) throw profileError;
-
-      // Create normalized client_slug from business name
-      const clientSlug = businessName
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-        .replace(/\s+/g, '') // Remove spaces
-        .substring(0, 20); // Limit length
-
       // Map business type to industry code
       const industryMap: { [key: string]: string } = {
         'plumbing': 'plmb',
         'electrical': 'elec',
         'hvac': 'hvac',
-        'cleaning': 'clean',
+        'cleaning': 'clen',
         'landscaping': 'land',
         'pest-control': 'pest',
         'handyman': 'hand',
@@ -78,93 +60,75 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
       };
 
       const industry = industryMap[businessType] || 'misc';
-      const region = 'au'; // Default to Australia for now
-      const clientId = `${region}_${industry}_${clientSlug}`;
 
-      // Create voice_ai_clients record (database triggers will auto-assign port and api_proxy_path)
-      const { error: clientError } = await supabase
-        .from('voice_ai_clients')
-        .insert([{
-          client_id: clientId,
-          user_id: user.id,
-          business_name: businessName,
-          region: region,
-          industry: industry,
-          client_slug: clientSlug,
-          status: 'active',
-          port: 3011, // Will be auto-assigned by trigger if needed
-          config: {
-            business_type: businessType,
-            service_fee: parseFloat(serviceFee),
-            features: {
-              voice_calls: true,
-              sms: true,
-              call_recording: true,
-              analytics: true
-            }
+      // Get region-specific voice ID
+      const voiceIdMap: { [key: string]: string } = {
+        'AU': 'G83AhxHK8kccx46W4Tcd', // Male Australian voice
+        'US': 'pNInz6obpgDQGcFmaJgB', // Male US voice (Adam)
+        'UK': 'ThT5KcBeYPX3keUQqHPh', // Male UK voice (Antoni)
+      };
+      const voice_id = voiceIdMap[region] || voiceIdMap['AU'];
+
+      console.log('[BusinessSetup] Calling client-provisioning edge function...');
+
+      // Call NEW client-provisioning edge function - it handles EVERYTHING!
+      const { data: provisioningData, error: provisioningError } = await supabase.functions.invoke(
+        'client-provisioning',
+        {
+          body: {
+            business_name: businessName,
+            region: region,
+            industry: businessType, // Pass full industry name
+            phone_number: phoneNumber,
+            user_id: user.id,
+            voice_id: voice_id,
           }
-        }]);
-
-      if (clientError) throw clientError;
-
-      // Hide form loading and show beautiful provisioning overlay
-      setIsLoading(false);
-      setShowProvisioningOverlay(true);
-
-      // Trigger client provisioning automation
-      try {
-        const { data: provisioningData, error: provisioningError } = await supabase.functions.invoke(
-          'client-provisioning',
-          {
-            body: {
-              client_id: clientId,
-              business_name: businessName,
-              region: region,
-              industry: industry,
-              client_slug: clientSlug
-            }
-          }
-        );
-
-        if (provisioningError) {
-          console.error('Provisioning error:', provisioningError);
-          setShowProvisioningOverlay(false);
-          toast({
-            title: "Provisioning Warning",
-            description: "Your account was created but provisioning may take longer. You can still access your dashboard.",
-            variant: "destructive",
-          });
-        } else {
-          // Success! Auto-redirect after a brief moment
-          setTimeout(() => {
-            setShowProvisioningOverlay(false);
-            toast({
-              title: "Welcome to Klariqo!",
-              description: "Your AI voice agent is ready to take calls!",
-            });
-            onComplete({ region, industry, clientSlug });
-          }, 2000);
         }
-      } catch (provisioningError) {
-        console.error('Failed to trigger provisioning:', provisioningError);
+      );
+
+      if (provisioningError) {
+        console.error('Provisioning error:', provisioningError);
+        throw new Error(provisioningError.message || 'Failed to provision client');
+      }
+
+      console.log('[BusinessSetup] Provisioning successful:', provisioningData);
+
+      // Extract client_slug from response for redirect
+      // Format: au_plmb_businessname_001 -> need to get "businessname" part
+      const clientSlug = businessName
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .substring(0, 20);
+
+      // Update profile with onboarding completed
+      await supabase
+        .from('profiles')
+        .update({
+          business_name: businessName,
+          business_type: businessType,
+          onboarding_completed: true
+        } as any)
+        .eq('user_id', user.id);
+
+      // Success! Show success message and redirect
+      setTimeout(() => {
         setShowProvisioningOverlay(false);
         toast({
-          title: "Provisioning Warning",
-          description: "Your account was created but automated setup may take longer. You can still access your dashboard.",
-          variant: "destructive",
+          title: "Welcome to Klariqo!",
+          description: "Your AI voice agent is ready to take calls!",
         });
-        onComplete({ region, industry, clientSlug });
-      }
+        onComplete({ region: region.toLowerCase(), industry, clientSlug });
+      }, 2000);
 
     } catch (error) {
       console.error('Error setting up business:', error);
       setShowProvisioningOverlay(false);
+      setIsLoading(false);
       toast({
-        title: "Error",
-        description: "Failed to save business information. Please try again.",
+        title: "Setup Error",
+        description: error instanceof Error ? error.message : "Failed to set up your business. Please try again.",
         variant: "destructive",
       });
-      setIsLoading(false);
     }
   };
 
@@ -188,7 +152,7 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
                 required
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="businessType">Business Type</Label>
               <Select value={businessType} onValueChange={setBusinessType} required>
@@ -204,27 +168,42 @@ export function BusinessSetupForm({ onComplete }: BusinessSetupFormProps) {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="serviceFee">Service Call Fee ($)</Label>
-              <Input
-                id="serviceFee"
-                type="number"
-                value={serviceFee}
-                onChange={(e) => setServiceFee(e.target.value)}
-                placeholder="e.g. 89"
-                required
-                min="0"
-                step="0.01"
-              />
+              <Label htmlFor="region">Region</Label>
+              <Select value={region} onValueChange={setRegion} required>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select your region" />
+                </SelectTrigger>
+                <SelectContent className="z-50 bg-background border">
+                  <SelectItem value="AU">Australia</SelectItem>
+                  <SelectItem value="US">United States</SelectItem>
+                  <SelectItem value="UK">United Kingdom</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            
-            <Button 
-              type="submit" 
-              className="w-full" 
+
+            <div className="space-y-2">
+              <Label htmlFor="phoneNumber">Phone Number</Label>
+              <Input
+                id="phoneNumber"
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="+61400000000"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                This will be your AI assistant's phone number
+              </p>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isLoading}
             >
-              {isLoading ? "Setting up..." : "Complete Setup"}
+              {isLoading ? "Setting up your AI agent..." : "Complete Setup"}
             </Button>
           </form>
         </CardContent>
