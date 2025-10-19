@@ -1,13 +1,18 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useCurrentClient } from '@/hooks/useCurrentClient';
+import { useToast } from '@/hooks/use-toast';
 
 export function LiveDemoSection() {
   const { profile } = useAuth();
+  const { client } = useCurrentClient();
+  const { toast } = useToast();
   const [isListening, setIsListening] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const extendedProfile = profile as any;
 
   const handleDemoClick = () => {
@@ -17,21 +22,73 @@ export function LiveDemoSection() {
     } else {
       setIsListening(true);
       // Start recording logic here
+      toast({
+        title: "Voice Demo",
+        description: "Voice demo feature coming soon. Use the 'Test Call' button for live testing.",
+      });
+      setTimeout(() => setIsListening(false), 2000);
     }
   };
 
-  const playDemoResponse = () => {
+  const playDemoResponse = async () => {
     if (isPlaying) {
+      // Stop playback
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
       setIsPlaying(false);
-      // Stop playback logic here
-    } else {
+      return;
+    }
+
+    // Check if client has intro audio file configured
+    // Expected format: {client_id}_intro.ulaw (e.g., au_plmb_jamesonplumbing_001_intro.ulaw)
+    if (!client?.intro_audio_file) {
+      toast({
+        title: "No intro audio configured",
+        description: "Intro audio will be generated automatically during client provisioning. For now, use 'Test Call' button to hear the live AI.",
+      });
+      return;
+    }
+
+    try {
       setIsPlaying(true);
-      // Start playback logic here
-      
-      // Mock playback completion after 3 seconds
-      setTimeout(() => {
+
+      // Construct Supabase storage URL
+      // Bucket: audio-snippets, File: {client_id}_intro.ulaw
+      const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+      const audioUrl = `${SUPABASE_URL}/storage/v1/object/public/audio-snippets/${client.intro_audio_file}`;
+
+      console.log('[LiveDemo] Attempting to play audio:', audioUrl);
+
+      // Create and play audio
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+      }
+
+      audioRef.current.src = audioUrl;
+      audioRef.current.onended = () => setIsPlaying(false);
+      audioRef.current.onerror = (e) => {
+        console.error('[LiveDemo] Audio playback error:', e);
         setIsPlaying(false);
-      }, 3000);
+        toast({
+          title: "Playback error",
+          description: "Intro audio file not found. It will be generated during next client provisioning.",
+          variant: "destructive",
+        });
+      };
+
+      await audioRef.current.play();
+      console.log('[LiveDemo] Audio playing successfully');
+
+    } catch (error) {
+      console.error('[LiveDemo] Audio playback exception:', error);
+      setIsPlaying(false);
+      toast({
+        title: "Playback failed",
+        description: "Could not play audio. Please try again or use Test Call button.",
+        variant: "destructive",
+      });
     }
   };
 

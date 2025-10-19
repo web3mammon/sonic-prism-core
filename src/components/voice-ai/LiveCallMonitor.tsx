@@ -78,7 +78,7 @@ export const LiveCallMonitor: React.FC<LiveCallMonitorProps> = ({
       </div>
 
       {activeCalls.length === 0 ? (
-        <Card>
+        <Card className="bg-muted/50">
           <CardContent className="text-center py-12">
             <Phone className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium mb-2">No Active Calls</h3>
@@ -90,9 +90,9 @@ export const LiveCallMonitor: React.FC<LiveCallMonitorProps> = ({
       ) : (
         <div className="grid gap-4">
           {activeCalls.map((call) => (
-            <Card 
-              key={call.id} 
-              className={`border-l-4 ${
+            <Card
+              key={call.id}
+              className={`bg-muted/50 border-l-4 ${
                 call.status === 'ringing' ? 'border-l-blue-500' : 'border-l-green-500'
               } hover:shadow-md transition-shadow cursor-pointer`}
               onClick={() => setSelectedCall(call)}

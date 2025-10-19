@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,14 +12,105 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
+interface TestCall {
+  id: string;
+  date: string;
+  number: string;
+  duration: string;
+  status: string;
+  callSid: string;
+}
+
 export default function Testing() {
   const [isCallActive, setIsCallActive] = useState(false);
   const [testNumber, setTestNumber] = useState("");
   const [testScript, setTestScript] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [testHistory, setTestHistory] = useState<TestCall[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
   const { client: apiClient } = useClientAPI();
   const { client: currentClient } = useCurrentClient();
   const { profile } = useAuth();
+
+  // Fetch real test call history from database
+  useEffect(() => {
+    if (!currentClient?.client_id) {
+      setTestHistory([]);
+      setHistoryLoading(false);
+      return;
+    }
+
+    const fetchTestHistory = async () => {
+      try {
+        setHistoryLoading(true);
+
+        // Fetch recent call sessions for this client
+        const { data: callSessions, error } = await supabase
+          .from('call_sessions')
+          .select('*')
+          .eq('client_id', currentClient.client_id)
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (error) {
+          console.error('Error fetching test history:', error);
+          return;
+        }
+
+        // Transform to TestCall format
+        const formattedHistory: TestCall[] = (callSessions || []).map(call => ({
+          id: call.id,
+          date: new Date(call.created_at).toLocaleString(),
+          number: call.caller_number || 'Unknown',
+          duration: formatDuration(call.duration_seconds || 0),
+          status: call.status,
+          callSid: call.call_sid,
+        }));
+
+        setTestHistory(formattedHistory);
+        setCurrentPage(1); // Reset to first page when data changes
+      } catch (error) {
+        console.error('Error fetching test history:', error);
+      } finally {
+        setHistoryLoading(false);
+      }
+    };
+
+    fetchTestHistory();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('test-call-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'call_sessions',
+          filter: `client_id=eq.${currentClient.client_id}`,
+        },
+        () => {
+          // Refetch when data changes
+          fetchTestHistory();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentClient?.client_id]);
+
+  // Helper function to format duration
+  const formatDuration = (seconds: number): string => {
+    if (!seconds) return '0s';
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Real test call using actual voice AI pipeline via Twilio
   const handleStartTest = async () => {
@@ -93,27 +184,26 @@ export default function Testing() {
     }
   };
 
-  // Mock test history for now - TODO: Pull from call_sessions table
-  const testHistory = [
-    { id: 1, date: "2024-01-15 14:30", number: "+1234567890", duration: "2:34", status: "completed", score: 95 },
-    { id: 2, date: "2024-01-15 12:15", number: "+1987654321", duration: "1:42", status: "completed", score: 88 },
-    { id: 3, date: "2024-01-14 16:45", number: "+1555123456", duration: "3:12", status: "failed", score: 0 },
-  ];
+  // Pagination calculations
+  const totalPages = Math.ceil(testHistory.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentCalls = testHistory.slice(startIndex, endIndex);
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-6 p-6 font-manrope">
+      <div className="space-y-2">
         <h1 className="text-3xl font-bold">Testing Suite</h1>
         <p className="text-muted-foreground">
           Test your voice AI agent with custom scenarios and phone numbers
         </p>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-2 items-start">
         {/* Test Call Interface */}
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader>
-            <CardTitle>Manual Test Call</CardTitle>
+            <CardTitle className="font-bold">Manual Test Call</CardTitle>
             <CardDescription>
               Initiate a test call to validate your AI agent's performance
             </CardDescription>
@@ -171,49 +261,104 @@ export default function Testing() {
           </CardContent>
         </Card>
 
-        {/* Recent Test Calls - moved from bottom to replace Quick Tests */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Test Calls</CardTitle>
-            <CardDescription>
-              History of your test calls with performance metrics
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {testHistory.map((test) => (
-                <div key={test.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    <div className={`w-2 h-2 rounded-full ${
-                      test.status === "completed" ? "bg-green-500" : "bg-red-500"
-                    }`} />
-                    <div>
-                      <p className="text-sm font-medium">{test.number}</p>
-                      <p className="text-xs text-muted-foreground">{test.date}</p>
+        {/* Recent Test Calls */}
+        <div className="space-y-6 pt-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold">Recent Test Calls</h2>
+            <p className="text-muted-foreground">
+              History of your test calls - updates in real-time
+            </p>
+          </div>
+          <div>
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            ) : testHistory.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="text-sm">No test calls yet</p>
+                <p className="text-xs mt-1">Start a test call to see it appear here</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {currentCalls.map((test) => (
+                    <div key={test.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className={`w-2 h-2 rounded-full ${
+                          test.status === "completed" ? "bg-green-500" :
+                          test.status === "in-progress" ? "bg-blue-500 animate-pulse" :
+                          test.status === "ringing" ? "bg-yellow-500 animate-pulse" :
+                          "bg-red-500"
+                        }`} />
+                        <div>
+                          <p className="text-sm font-medium">{test.number}</p>
+                          <p className="text-xs text-muted-foreground">{test.date}</p>
+                        </div>
+                        <Badge
+                          variant={
+                            test.status === "completed" ? "secondary" :
+                            test.status === "in-progress" || test.status === "ringing" ? "default" :
+                            "destructive"
+                          }
+                          className="text-xs"
+                        >
+                          {test.status}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <div className="text-right">
+                          <p className="text-xs font-medium">{test.duration}</p>
+                          <p className="text-xs text-muted-foreground">SID: {test.callSid.slice(-8)}</p>
+                        </div>
+                      </div>
                     </div>
-                    <Badge variant={test.status === "completed" ? "secondary" : "destructive"} className="text-xs">
-                      {test.status}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="text-right">
-                      <p className="text-xs font-medium">{test.duration}</p>
-                      <p className="text-xs text-muted-foreground">Score: {test.score}%</p>
-                    </div>
-                    <div className="flex space-x-1">
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                        <Volume2 className="h-3 w-3" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-6 w-6 p-0">
-                        <Download className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {startIndex + 1}-{Math.min(endIndex, testHistory.length)} of {testHistory.length} calls
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </Button>
+                      <div className="flex items-center gap-1">
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                          <Button
+                            key={page}
+                            variant={currentPage === page ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setCurrentPage(page)}
+                            className="w-8 h-8 p-0"
+                          >
+                            {page}
+                          </Button>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -104,12 +104,38 @@ async function handleVoiceWebhook(req: Request, supabase: any) {
 async function handleStatusWebhook(req: Request, supabase: any) {
   const formData = await req.formData();
   const params = Object.fromEntries(formData.entries());
-  
-  console.log('Status webhook received:', params);
+
+  console.log('[Status] ========================================');
+  console.log('[Status] Webhook received:', params);
 
   const callSid = params.CallSid as string;
   const callStatus = params.CallStatus as string;
   const callDuration = params.CallDuration as string;
+  const timestamp = params.Timestamp as string;
+
+  if (!callSid) {
+    console.error('[Status] ❌ Missing CallSid in status webhook');
+    return new Response('Missing CallSid', { status: 400 });
+  }
+
+  // Check if call session exists
+  const { data: existingSession, error: lookupError } = await supabase
+    .from('call_sessions')
+    .select('id, status')
+    .eq('call_sid', callSid)
+    .maybeSingle();
+
+  if (lookupError) {
+    console.error('[Status] Database lookup error:', lookupError);
+  }
+
+  if (!existingSession) {
+    console.warn(`[Status] ⚠️ No call session found for SID: ${callSid} - call may have been created outside our system`);
+    // Don't fail - Twilio will retry if we return error
+    return new Response('OK - Session not found', { status: 200 });
+  }
+
+  console.log(`[Status] Found session ${existingSession.id} with current status: ${existingSession.status}`);
 
   // Update call session
   const updateData: any = {
@@ -118,23 +144,31 @@ async function handleStatusWebhook(req: Request, supabase: any) {
   };
 
   if (callStatus === 'completed' && callDuration) {
-    updateData.duration_seconds = parseInt(callDuration);
+    const durationSeconds = parseInt(callDuration);
+    updateData.duration_seconds = durationSeconds;
     updateData.end_time = new Date().toISOString();
-    
-    // Calculate cost (example: $0.05 per minute)
+
+    // Calculate cost: $2.00 per call (flat rate as per business model)
+    // OR based on duration if preferred
     const costPerMinute = 0.05;
-    const minutes = Math.ceil(parseInt(callDuration) / 60);
+    const minutes = Math.ceil(durationSeconds / 60);
     updateData.cost_amount = minutes * costPerMinute;
+
+    console.log(`[Status] Call completed - Duration: ${durationSeconds}s, Cost: $${updateData.cost_amount}`);
   }
 
-  const { error } = await supabase
+  const { error: updateError } = await supabase
     .from('call_sessions')
     .update(updateData)
     .eq('call_sid', callSid);
 
-  if (error) {
-    console.error('Error updating call session:', error);
+  if (updateError) {
+    console.error('[Status] ❌ Error updating call session:', updateError);
+    return new Response('Database update failed', { status: 500 });
   }
+
+  console.log(`[Status] ✅ Successfully updated call ${callSid} to status: ${updateData.status}`);
+  console.log('[Status] ========================================');
 
   return new Response('OK', { status: 200 });
 }

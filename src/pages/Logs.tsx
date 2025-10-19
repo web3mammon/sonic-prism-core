@@ -109,8 +109,8 @@ export default function Logs() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-6 p-6 font-manrope">
+      <div className="space-y-2">
         <h1 className="text-3xl font-bold">Call Conversation Logs</h1>
         <p className="text-muted-foreground">
           View detailed conversation transcripts and interactions
@@ -119,7 +119,7 @@ export default function Logs() {
 
       {/* Summary Stats */}
       <div className="grid gap-4 md:grid-cols-4">
-        <Card>
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
               <Phone className="h-5 w-5 text-blue-500" />
@@ -130,7 +130,7 @@ export default function Logs() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
               <MessageSquare className="h-5 w-5 text-green-500" />
@@ -141,7 +141,7 @@ export default function Logs() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
               <User className="h-5 w-5 text-purple-500" />
@@ -152,7 +152,7 @@ export default function Logs() {
             </div>
           </CardContent>
         </Card>
-        <Card>
+        <Card className="bg-muted/50">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
               <Bot className="h-5 w-5 text-orange-500" />
@@ -165,15 +165,17 @@ export default function Logs() {
         </Card>
       </div>
 
+      <hr className="border-border" />
+
       {/* Log Viewer */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Conversation Logs</CardTitle>
-          <CardDescription>
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Conversation Logs</h2>
+          <p className="text-muted-foreground">
             Real-time conversation transcripts from your Voice AI calls
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -270,9 +272,9 @@ export default function Logs() {
             // Show call list view
             <div className="space-y-3">
               {callsWithLogs.map((call) => (
-                <Card 
-                  key={call.callSid} 
-                  className="cursor-pointer hover:shadow-md transition-shadow"
+                <Card
+                  key={call.callSid}
+                  className="cursor-pointer hover:shadow-md transition-shadow bg-muted/50"
                   onClick={() => setSelectedCallSid(call.callSid)}
                 >
                   <CardContent className="p-4">
@@ -311,8 +313,8 @@ export default function Logs() {
               </Button>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

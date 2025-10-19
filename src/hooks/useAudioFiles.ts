@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useClientAPI } from '@/hooks/useClientAPI';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AudioFile {
   id: string;
@@ -21,10 +21,9 @@ export function useAudioFiles(clientId: string | null) {
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { apiUrl } = useClientAPI();
 
   const fetchAudioFiles = async () => {
-    if (!clientId || !apiUrl) {
+    if (!clientId) {
       setAudioFiles([]);
       setLoading(false);
       return;
@@ -32,18 +31,54 @@ export function useAudioFiles(clientId: string | null) {
 
     try {
       setLoading(true);
-      const response = await fetch(`${apiUrl}/audio/files`);
-      const data = await response.json();
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to fetch audio files');
+      // Fetch client's intro audio file
+      const { data: client, error: clientError } = await supabase
+        .from('voice_ai_clients')
+        .select('intro_audio_file, created_at, business_name')
+        .eq('client_id', clientId)
+        .single();
+
+      if (clientError) throw clientError;
+
+      // If client has intro audio file, format it for display
+      const files: AudioFile[] = [];
+
+      if (client?.intro_audio_file) {
+        const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+        const audioUrl = `${SUPABASE_URL}/storage/v1/object/public/audio-snippets/${client.intro_audio_file}`;
+
+        // Check if file exists in storage by attempting to fetch metadata
+        let fileExists = true;
+        try {
+          const checkResponse = await fetch(audioUrl, { method: 'HEAD' });
+          fileExists = checkResponse.ok;
+        } catch {
+          fileExists = false;
+        }
+
+        files.push({
+          id: client.intro_audio_file,
+          file_name: client.intro_audio_file,
+          file_path: audioUrl,
+          file_type: 'audio/basic', // ulaw format
+          category: 'introductions',
+          text_content: `Introduction message for ${client.business_name}`,
+          duration_ms: null, // We don't track duration yet
+          file_size_bytes: null, // We don't track size yet
+          created_at: client.created_at,
+          metadata: {
+            category: 'introductions',
+            exists: fileExists
+          }
+        });
       }
 
-      setAudioFiles(data.audio_files || []);
+      setAudioFiles(files);
       setError(null);
     } catch (err) {
       console.error('Error fetching audio files:', err);
-      setError('Failed to fetch audio files');
+      setError(err instanceof Error ? err.message : 'Failed to fetch audio files');
       setAudioFiles([]);
     } finally {
       setLoading(false);
@@ -52,7 +87,7 @@ export function useAudioFiles(clientId: string | null) {
 
   useEffect(() => {
     fetchAudioFiles();
-  }, [clientId, apiUrl]);
+  }, [clientId]);
 
   return { audioFiles, loading, error, refetch: fetchAudioFiles };
 }

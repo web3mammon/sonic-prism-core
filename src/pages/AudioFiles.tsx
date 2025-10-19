@@ -3,14 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Search,
   FileAudio,
   Calendar,
   Filter,
-  Clock,
-  Loader2
+  Loader2,
+  Download
 } from "lucide-react";
 import {
   Select,
@@ -28,6 +27,15 @@ export default function AudioFiles() {
 
   const { client, loading: clientLoading } = useCurrentClient();
   const { audioFiles, loading: filesLoading, error } = useAudioFiles(client?.client_id || null);
+
+  const handleDownload = (file: any) => {
+    const a = document.createElement('a');
+    a.href = file.file_path;
+    a.download = file.file_name;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   if (clientLoading || filesLoading) {
     return (
@@ -67,64 +75,15 @@ export default function AudioFiles() {
     }
   };
 
-  const formatFileSize = (bytes: number | null) => {
-    if (!bytes) return "Unknown";
-    const mb = bytes / (1024 * 1024);
-    return `${mb.toFixed(1)} MB`;
-  };
-
-  const formatDuration = (ms: number | null) => {
-    if (!ms) return "Unknown";
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-manrope">
       <div>
         <h1 className="text-3xl font-bold">Audio Files</h1>
         <p className="text-muted-foreground">
-          Manage and review pre-recorded audio snippets used by your AI agent
+          Manage pre-recorded audio snippets used by your AI agent during calls
         </p>
-      </div>
-
-      {/* Storage Overview */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatFileSize(audioFiles.reduce((sum, file) => sum + (file.file_size_bytes || 0), 0))}
-            </div>
-            <Progress value={25} className="mt-2" />
-            <p className="text-xs text-muted-foreground mt-2">Total storage used</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Total Files</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{audioFiles.length}</div>
-            <p className="text-xs text-muted-foreground mt-2">Audio snippets</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Available Files</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {audioFiles.filter(f => f.metadata?.exists).length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">Ready to use</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Audio Files Management */}
@@ -132,7 +91,7 @@ export default function AudioFiles() {
         <CardHeader>
           <CardTitle>Audio Snippets</CardTitle>
           <CardDescription>
-            Browse and manage pre-recorded audio files used by your AI agent
+            Audio files in telephony format (.ulaw) used during live calls. Download to review.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -175,19 +134,10 @@ export default function AudioFiles() {
                   <div className="space-y-1">
                     <p className="font-medium">{file.file_name}</p>
                     <p className="text-sm text-muted-foreground line-clamp-2">{file.text_content}</p>
-                    <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-                      <span>{formatFileSize(file.file_size_bytes)}</span>
-                    </div>
                   </div>
                 </div>
 
                 <div className="flex items-center space-x-4">
-                  {file.duration_ms && (
-                    <div className="flex items-center space-x-2">
-                      <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{formatDuration(file.duration_ms)}</span>
-                    </div>
-                  )}
                   {getCategoryBadge(file.category)}
                   <div className="flex items-center space-x-2 text-sm">
                     {file.metadata?.exists ? (
@@ -196,6 +146,16 @@ export default function AudioFiles() {
                       <span className="text-red-600">✗ Missing</span>
                     )}
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleDownload(file)}
+                    disabled={!file.metadata?.exists}
+                    title="Download telephony audio file"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
                 </div>
               </div>
             ))}

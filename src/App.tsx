@@ -22,6 +22,8 @@ import AdvancedAnalytics from "./pages/AdvancedAnalytics";
 import Logs from "./pages/Logs";
 import System from "./pages/System";
 import BusinessDetails from "./pages/BusinessDetails";
+import Integrations from "./pages/Integrations";
+import Billing from "./pages/Billing";
 import Auth from "./pages/Auth";
 import BusinessSetup from "./pages/BusinessSetup";
 import ResetPassword from "./pages/ResetPassword";
@@ -79,6 +81,8 @@ const App = () => (
                         <Routes>
                           <Route path="/" element={<TenantDashboard />} />
                           <Route path="/business-details" element={<BusinessDetails />} />
+                          <Route path="/integrations" element={<Integrations />} />
+                          <Route path="/billing" element={<Billing />} />
                           <Route path="/testing" element={<Testing />} />
                           <Route path="/call-data" element={<CallData />} />
                           <Route path="/audio-files" element={<AudioFiles />} />

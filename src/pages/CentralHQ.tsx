@@ -46,15 +46,23 @@ const CentralHQ = () => {
     systemLoad: 0,
     uptime: "0%",
     totalCalls: 0,
+    totalSMS: 0,
     avgResponseTime: "0s",
     callsToday: 0,
-    revenueToday: 0
+    revenueToday: 0,
+    regionalStats: [] as Array<{ region: string; count: number; percentage: number }>
   });
 
   const [clients, setClients] = useState([]);
   const [recentCalls, setRecentCalls] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [systemResources, setSystemResources] = useState({
+    cpu: 0,
+    memory: 0,
+    storage: 0,
+    loading: true
+  });
 
   // Fetch data from Supabase
   const fetchData = async () => {
@@ -87,22 +95,52 @@ const CentralHQ = () => {
       if (callsError) throw callsError;
 
       const callsToday = callsData?.length || 0;
-      
+
       // Calculate total revenue today
       const revenueToday = (callsData || []).reduce((sum, call) => sum + (parseFloat(String(call.cost_amount || 0)) || 0), 0);
 
+      // Fetch ALL calls for total count
+      const { count: totalCallsCount, error: allCallsError } = await supabase
+        .from('call_sessions')
+        .select('*', { count: 'exact', head: true });
+
+      const totalCalls = allCallsError ? 0 : (totalCallsCount || 0);
+
+      // Fetch total SMS count
+      const { count: totalSMSCount, error: allSMSError } = await supabase
+        .from('sms_logs')
+        .select('*', { count: 'exact', head: true });
+
+      const totalSMS = allSMSError ? 0 : (totalSMSCount || 0);
+
+      // Calculate regional distribution
+      const regionCounts: any = {};
+      (clientsData || []).forEach(client => {
+        const region = client.region?.toUpperCase() || 'UNKNOWN';
+        regionCounts[region] = (regionCounts[region] || 0) + 1;
+      });
+
+      const totalRegionalClients = Object.values(regionCounts).reduce((sum: number, count: any) => sum + count, 0) as number;
+      const regionalStats = Object.entries(regionCounts).map(([region, count]: [string, any]) => ({
+        region,
+        count,
+        percentage: totalRegionalClients > 0 ? Math.round((count / totalRegionalClients) * 100) : 0
+      })).sort((a, b) => b.count - a.count);
+
       // Calculate system load based on active clients
       const systemLoad = Math.min(Math.round((activeCount / Math.max(clientsData?.length || 1, 1)) * 100), 100);
-      
+
       setSystemMetrics({
         totalClients: clientsData?.length || 0,
         activeClients: activeCount,
         systemLoad: systemLoad,
         uptime: "99.9%",
-        totalCalls: callsToday,
+        totalCalls,
+        totalSMS,
         avgResponseTime: "1.2s",
         callsToday: callsToday,
-        revenueToday: revenueToday
+        revenueToday: revenueToday,
+        regionalStats
       });
 
       // Fetch recent calls for display
@@ -121,11 +159,48 @@ const CentralHQ = () => {
     }
   };
 
-  // Auto-refresh data every 30 seconds
+  // Fetch real system resources
+  const fetchSystemResources = async () => {
+    try {
+      // Get CPU, Memory, and Storage from Linux via edge function
+      const response = await fetch('https://btqccksigmohyjdxgrrj.supabase.co/functions/v1/system-stats', {
+        headers: {
+          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ0cWNja3NpZ21vaHlqZHhncnJqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTgzNDY4MDEsImV4cCI6MjA3MzkyMjgwMX0.kOiOYBO-lro83HMSaCTlnryfRM3Md3pWkdAaYmVHhJ4`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSystemResources({
+          cpu: data.cpu || 0,
+          memory: data.memory || 0,
+          storage: data.storage || 0,
+          loading: false
+        });
+      } else {
+        // Fallback to placeholder if edge function doesn't exist yet
+        setSystemResources({
+          cpu: 0,
+          memory: 0,
+          storage: 0,
+          loading: false
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching system resources:', error);
+      setSystemResources({
+        cpu: 0,
+        memory: 0,
+        storage: 0,
+        loading: false
+      });
+    }
+  };
+
+  // Initial data load only (no auto-refresh)
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
-    return () => clearInterval(interval);
+    fetchSystemResources();
   }, []);
 
   // Transform clients data for display
@@ -192,30 +267,22 @@ const CentralHQ = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Central HQ</h1>
+          <h1 className="text-3xl font-bold">Central HQ</h1>
           <p className="text-muted-foreground">
             Live system overview and client management console
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => { fetchData(); fetchSystemResources(); }} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             {loading ? 'Refreshing...' : 'Refresh'}
-          </Button>
-          <Button variant="outline" size="sm">
-            <Activity className="mr-2 h-4 w-4" />
-            System Health
-          </Button>
-          <Button size="sm">
-            <Settings className="mr-2 h-4 w-4" />
-            Settings
           </Button>
         </div>
       </div>
 
       {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -228,7 +295,7 @@ const CentralHQ = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Active Clients</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground" />
@@ -241,7 +308,7 @@ const CentralHQ = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Calls Today</CardTitle>
             <Phone className="h-4 w-4 text-muted-foreground" />
@@ -254,7 +321,7 @@ const CentralHQ = () => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Revenue Today</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
@@ -268,408 +335,77 @@ const CentralHQ = () => {
         </Card>
       </div>
 
-      {/* Search and Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Client Management</CardTitle>
-          <CardDescription>
+      {/* Client Management */}
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Client Management</h2>
+          <p className="text-muted-foreground">
             Search and manage all client accounts ({clients.length} total, {systemMetrics.activeClients} active)
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4 mb-6">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search clients by name, region, or plan..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Button variant="outline">
-              <Download className="mr-2 h-4 w-4" />
-              Export Report
-            </Button>
-          </div>
+          </p>
+        </div>
 
-          <div className="space-y-4">
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="text-sm text-muted-foreground mt-2">Loading clients...</p>
-              </div>
-            ) : recentClients.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-sm text-muted-foreground">No clients found</p>
-              </div>
-            ) : (
-              recentClients
-                .filter(client => 
-                  client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  client.region.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                  client.plan.toLowerCase().includes(searchQuery.toLowerCase())
-                )
-                .map((client) => (
-                  <div key={client.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-3 h-3 rounded-full ${getStatusColor(client.status)}`} />
-                      <div>
-                        <div className="font-medium hover:text-primary cursor-pointer" 
-                             onClick={() => window.open(`/${client.region.toLowerCase()}/plmb/${client.name.toLowerCase().replace(/\s+/g, '')}`, '_blank')}>
-                          {client.name}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {client.region} • Port {client.port} • {client.callsToday} calls today • Last: {client.lastActive}
-                        </div>
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search clients by name, region, or plan..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <Button variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            Export Report
+          </Button>
+        </div>
+
+        <div className="space-y-4">
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="text-sm text-muted-foreground mt-2">Loading clients...</p>
+            </div>
+          ) : recentClients.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-sm text-muted-foreground">No clients found</p>
+            </div>
+          ) : (
+            recentClients
+              .filter(client =>
+                client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                client.region.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                client.plan.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+              .map((client) => (
+                <div key={client.id} className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-3 h-3 rounded-full ${getStatusColor(client.status)}`} />
+                    <div>
+                      <div className="font-medium hover:text-primary cursor-pointer"
+                           onClick={() => window.open(`/${client.region.toLowerCase()}/plmb/${client.name.toLowerCase().replace(/\s+/g, '')}`, '_blank')}>
+                        {client.name}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <Badge variant="secondary">{client.plan}</Badge>
-                      <div className="flex gap-2">
-                        {client.status === 'active' ? (
-                          <Button variant="outline" size="sm" className="text-orange-600 hover:text-orange-700">
-                            Stop
-                          </Button>
-                        ) : (
-                          <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700">
-                            Start
-                          </Button>
-                        )}
-                        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                          Delete
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Settings className="h-4 w-4" />
-                        </Button>
+                      <div className="text-sm text-muted-foreground">
+                        {client.region} • Port {client.port} • {client.callsToday} calls today • Last: {client.lastActive}
                       </div>
                     </div>
                   </div>
-                ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Dashboard Tabs */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="voice-ai">Voice AI</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-          <TabsTrigger value="system">System</TabsTrigger>
-          <TabsTrigger value="logs">Logs</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Performance Metrics
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex justify-between">
-                  <span>Total API Calls</span>
-                  <span className="font-bold">{systemMetrics.totalCalls.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Avg Response Time</span>
-                  <span className="font-bold">{systemMetrics.avgResponseTime}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Success Rate</span>
-                  <span className="font-bold text-green-600">98.7%</span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5" />
-                  System Alerts
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {systemAlerts.map((alert) => (
-                    <Alert key={alert.id} variant={getAlertVariant(alert.type)}>
-                      <AlertDescription className="text-sm">
-                        <div className="flex justify-between">
-                          <span>{alert.message}</span>
-                          <span className="text-xs opacity-70">{alert.time}</span>
-                        </div>
-                      </AlertDescription>
-                    </Alert>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="voice-ai">
-          <div className="space-y-6">
-            <VoiceAIStats />
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <LiveCallMonitor showAll={true} />
-              </div>
-              <div>
-                <VoiceAIDashboard />
-              </div>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analytics">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Usage Analytics
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span>Voice Calls</span>
-                      <span>8,420</span>
-                    </div>
-                    <Progress value={84} />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span>SMS Messages</span>
-                      <span>5,230</span>
-                    </div>
-                    <Progress value={52} />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span>API Requests</span>
-                      <span>12,840</span>
-                    </div>
-                    <Progress value={95} />
+                  <div className="flex items-center gap-4">
+                    <Badge variant="secondary">{client.plan}</Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`/${client.region.toLowerCase()}/plmb/${client.name.toLowerCase().replace(/\s+/g, '')}`, '_blank')}
+                    >
+                      View Dashboard
+                    </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Globe className="h-5 w-5" />
-                  Regional Distribution
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex justify-between">
-                    <span>North America</span>
-                    <span className="font-bold">45%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Europe</span>
-                    <span className="font-bold">32%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Asia Pacific</span>
-                    <span className="font-bold">18%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Others</span>
-                    <span className="font-bold">5%</span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="security">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Shield className="h-5 w-5" />
-                  Security Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span>SSL Certificates</span>
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Firewall Status</span>
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>DDoS Protection</span>
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Access Controls</span>
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Recent Security Events
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="text-sm">
-                    <div className="font-medium">Failed login attempt blocked</div>
-                    <div className="text-muted-foreground">IP: 192.168.1.100 • 15 min ago</div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="font-medium">SSL certificate renewed</div>
-                    <div className="text-muted-foreground">Domain: *.klariqo.com • 2 hours ago</div>
-                  </div>
-                  <div className="text-sm">
-                    <div className="font-medium">Security scan completed</div>
-                    <div className="text-muted-foreground">No threats detected • 6 hours ago</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="system">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Database className="h-5 w-5" />
-                  System Resources
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span>CPU Usage</span>
-                      <span>67%</span>
-                    </div>
-                    <Progress value={67} />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span>Memory Usage</span>
-                      <span>45%</span>
-                    </div>
-                    <Progress value={45} />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span>Storage Usage</span>
-                      <span>78%</span>
-                    </div>
-                    <Progress value={78} />
-                  </div>
-                  <div>
-                    <div className="flex justify-between mb-2">
-                      <span>Network I/O</span>
-                      <span>34%</span>
-                    </div>
-                    <Progress value={34} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  Service Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span>API Gateway</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full" />
-                      <span className="text-sm">Online</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Database</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full" />
-                      <span className="text-sm">Online</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Voice Services</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full" />
-                      <span className="text-sm">Online</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Analytics Engine</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-yellow-500 rounded-full" />
-                      <span className="text-sm">Degraded</span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="logs">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                System Logs
-              </CardTitle>
-              <CardDescription>Recent system events and activities</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {[
-                  { timestamp: "2025-01-15 14:32:18", level: "INFO", service: "API", message: "Client authentication successful for ACME Plumbing" },
-                  { timestamp: "2025-01-15 14:31:45", level: "WARN", service: "DB", message: "High connection pool usage detected" },
-                  { timestamp: "2025-01-15 14:30:22", level: "INFO", service: "VOICE", message: "Call completed successfully - Duration: 4m 32s" },
-                  { timestamp: "2025-01-15 14:29:18", level: "ERROR", service: "SMS", message: "Failed to send SMS - Invalid phone number format" },
-                  { timestamp: "2025-01-15 14:28:45", level: "INFO", service: "API", message: "New client registered: TechStart Solutions" },
-                  { timestamp: "2025-01-15 14:27:12", level: "INFO", service: "SYSTEM", message: "Scheduled backup initiated" },
-                ].map((log, index) => (
-                  <div key={index} className="flex gap-4 text-sm p-3 border rounded">
-                    <span className="text-muted-foreground min-w-fit">{log.timestamp}</span>
-                    <Badge variant={log.level === 'ERROR' ? 'destructive' : log.level === 'WARN' ? 'secondary' : 'outline'} className="min-w-fit">
-                      {log.level}
-                    </Badge>
-                    <span className="font-medium min-w-fit">{log.service}</span>
-                    <span className="flex-1">{log.message}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              ))
+          )}
+        </div>
+      </div>
     </div>
   );
 };

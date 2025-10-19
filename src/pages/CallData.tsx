@@ -125,60 +125,6 @@ export default function CallData() {
     }
   }, [client?.client_id, statusFilter, dateRange, exchangeRates, region]);
 
-  // Keep mock data as fallback for demo
-  const mockCallData = [
-    {
-      id: "C-001",
-      date: "2024-01-15 14:30:22",
-      phoneNumber: "+1 (555) 123-4567",
-      duration: "4:23",
-      status: "completed",
-      intent: "Appointment Booking",
-      confidence: 96,
-      cost: "$0.12"
-    },
-    {
-      id: "C-002", 
-      date: "2024-01-15 13:15:45",
-      phoneNumber: "+1 (555) 987-6543",
-      duration: "2:15",
-      status: "completed",
-      intent: "Emergency Service",
-      confidence: 98,
-      cost: "$0.08"
-    },
-    {
-      id: "C-003",
-      date: "2024-01-15 12:45:12",
-      phoneNumber: "+1 (555) 456-7890",
-      duration: "1:34",
-      status: "failed",
-      intent: "Unknown",
-      confidence: 45,
-      cost: "$0.05"
-    },
-    {
-      id: "C-004",
-      date: "2024-01-15 11:22:33",
-      phoneNumber: "+1 (555) 789-0123",
-      duration: "6:47",
-      status: "completed",
-      intent: "Quote Request",
-      confidence: 94,
-      cost: "$0.18"
-    },
-    {
-      id: "C-005",
-      date: "2024-01-15 10:15:55",
-      phoneNumber: "+1 (555) 321-6547",
-      duration: "3:12",
-      status: "completed",
-      intent: "General Inquiry",
-      confidence: 87,
-      cost: "$0.10"
-    }
-  ];
-
   const filteredData = callData.filter(call => {
     const matchesSearch = call.phoneNumber.includes(searchTerm) ||
                          call.intent.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -234,8 +180,8 @@ export default function CallData() {
 
 
   return (
-    <div className="space-y-6">
-      <div>
+    <div className="space-y-6 p-6 font-manrope">
+      <div className="space-y-2">
         <h1 className="text-3xl font-bold">Call Data</h1>
         <p className="text-muted-foreground">
           View and analyze all incoming calls handled by your AI agent
@@ -243,7 +189,7 @@ export default function CallData() {
       </div>
 
       {/* Filters and Search */}
-      <Card>
+      <Card className="bg-muted/50">
         <CardHeader>
           <CardTitle>Call History</CardTitle>
           <CardDescription>

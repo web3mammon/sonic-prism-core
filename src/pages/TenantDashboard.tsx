@@ -11,6 +11,7 @@ import { LiveCallMonitor } from "@/components/voice-ai/LiveCallMonitor";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useClientDashboardStats } from "@/hooks/useClientDashboardStats";
+import { useRecentActivity } from "@/hooks/useRecentActivity";
 import { useTenant } from "@/hooks/useTenant";
 import { useNavigate } from "react-router-dom";
 import { 
@@ -31,6 +32,7 @@ export default function Dashboard() {
   const { profile } = useAuth();
   const { client, loading: clientLoading, error: clientError } = useCurrentClient();
   const { stats, loading: statsLoading, error: statsError } = useClientDashboardStats(client?.client_id || null);
+  const { activities, loading: activitiesLoading } = useRecentActivity(client?.client_id || null);
   const { region } = useTenant();
   const navigate = useNavigate();
 
@@ -63,9 +65,7 @@ export default function Dashboard() {
     callsRemaining: stats?.callsRemaining || 0,
     callsThisMonth: stats?.callsThisMonth || 0,
     averageCallCost: 2.00, // Always $2 per call (USP)
-    lowBalanceThreshold: 10,
-    lastTopUp: "2024-01-15", // TODO: Add to database
-    nextBillingDate: "2024-02-01" // TODO: Add to database
+    lowBalanceThreshold: 10
   };
 
   const isLowBalance = creditData.balance <= creditData.lowBalanceThreshold;
@@ -83,8 +83,21 @@ export default function Dashboard() {
     navigate('./call-data');
   };
 
-  const handleSystemSettings = () => {
-    navigate('./system');
+  const handleTopUp = () => {
+    navigate('./billing');
+  };
+
+  const handleViewUsage = () => {
+    navigate('./call-data');  // Same as call history for now
+  };
+
+  const handleViewAllClients = () => {
+    navigate('/');  // Navigate to Central HQ
+  };
+
+  const handleScheduleMaintenance = () => {
+    // TODO: Implement maintenance scheduling
+    alert('Maintenance scheduling coming soon');
   };
 
   // Show loading state
@@ -135,8 +148,8 @@ export default function Dashboard() {
         <Alert className="border-destructive bg-destructive/10">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="font-medium">
-            <span className="text-destructive">Low balance warning:</span> You have {creditData.currencySymbol}{creditData.balance.toFixed(2)} remaining (approx. {Math.floor(creditData.balance / creditData.averageCallCost)} calls). 
-            <Button variant="link" className="text-destructive font-medium p-0 ml-1 h-auto">
+            <span className="text-destructive">Low balance warning:</span> You have {creditData.currencySymbol}{creditData.balance.toFixed(2)} remaining (approx. {Math.floor(creditData.balance / creditData.averageCallCost)} calls).
+            <Button variant="link" className="text-destructive font-medium p-0 ml-1 h-auto" onClick={handleTopUp}>
               Top up now to continue service
             </Button>
           </AlertDescription>
@@ -149,12 +162,6 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold">
             {client.business_name} Dashboard
           </h1>
-          <p className="text-muted-foreground">
-            {isClient 
-              ? "Monitor your AI assistant performance and manage your business"
-              : `Managing voice AI client: ${client.business_name}`
-            }
-          </p>
           <div className="flex items-center gap-2 mt-2">
             <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
               {client.status}
@@ -173,12 +180,6 @@ export default function Dashboard() {
             <Users className="mr-2 h-4 w-4" />
             {isClient ? "Call History" : "Customer Data"}
           </Button>
-          {isInternal && (
-            <Button variant="outline" size="sm" onClick={handleSystemSettings}>
-              <Settings className="mr-2 h-4 w-4" />
-              System Settings
-            </Button>
-          )}
         </div>
       </div>
 
@@ -197,10 +198,8 @@ export default function Dashboard() {
         <MetricsCard
           title="Calls This Month"
           value={creditData.callsThisMonth.toLocaleString()}
-          change="+12%"
-          changeType="positive"
           icon={Phone}
-          subtitle="vs last month"
+          subtitle="this month"
         />
         <MetricsCard
           title="Calls Remaining"
@@ -212,37 +211,31 @@ export default function Dashboard() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Credit Balance & Usage */}
-        <Card className="lg:col-span-2 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-primary/5 opacity-50" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                <CreditCard className="h-5 w-5 text-primary" />
-              </div>
+        <div className="lg:col-span-2 space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-primary" />
               Credit Balance
               {isLowBalance && <Badge variant="destructive" className="text-xs animate-pulse">Low Balance</Badge>}
-            </CardTitle>
-            <CardDescription>
+            </h2>
+            <p className="text-muted-foreground">
               Your current credit balance and call usage
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6 relative">
+            </p>
+          </div>
+          <div className="space-y-6">
             {/* Credit Balance Display */}
-            <div className="text-center p-8 rounded-xl border bg-gradient-to-br from-primary/5 to-transparent relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-              <div className="relative">
-                <div className="text-5xl font-bold bg-gradient-to-br from-primary via-primary to-primary/70 bg-clip-text text-transparent mb-3">
-                  {creditData.currencySymbol}{creditData.balance.toFixed(2)}
-                </div>
-                <div className="text-lg text-muted-foreground mb-1">{creditData.currency}</div>
-                <div className="text-sm text-muted-foreground">
-                  Approximately <span className="font-semibold text-primary">{Math.floor(creditData.balance / creditData.averageCallCost)} calls</span> remaining at {creditData.currencySymbol}{creditData.averageCallCost}/call
-                </div>
+            <div className="text-center p-8 rounded-lg bg-muted/50">
+              <div className="text-5xl font-bold text-primary mb-3">
+                {creditData.currencySymbol}{creditData.balance.toFixed(2)}
+              </div>
+              <div className="text-lg text-muted-foreground mb-1">{creditData.currency}</div>
+              <div className="text-sm text-muted-foreground">
+                Approximately <span className="font-semibold text-primary">{Math.floor(creditData.balance / creditData.averageCallCost)} calls</span> remaining at {creditData.currencySymbol}{creditData.averageCallCost}/call
               </div>
             </div>
 
             {/* Usage Overview */}
-            <div className="space-y-4 relative">
+            <div className="space-y-4">
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm font-medium">
                   <span className="flex items-center gap-2">
@@ -262,169 +255,136 @@ export default function Dashboard() {
                   {callsUsedPercentage.toFixed(1)}% of projected monthly usage
                 </p>
               </div>
-              
-              <div className="flex items-center justify-between pt-4">
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">Pay As You Go</p>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">Credit System</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      ${creditData.averageCallCost}/call
-                    </span>
-                  </div>
+
+              {isClient && (
+                <div className="flex items-center justify-end space-x-2 pt-2">
+                  <Button variant="outline" size="sm" onClick={handleViewUsage}>
+                    View Usage History
+                  </Button>
+                  <Button
+                    size="sm"
+                    className={isLowBalance ? "bg-destructive hover:bg-destructive/90" : ""}
+                    onClick={handleTopUp}
+                  >
+                    Top Up Credits
+                  </Button>
                 </div>
-                <div className="space-x-2">
-                  {isClient ? (
-                    <>
-                      <Button variant="outline" size="sm">
-                        View Usage History
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        className={isLowBalance ? "bg-destructive hover:bg-destructive/90" : ""}
-                      >
-                        Top Up Credits
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      {/* Future: Credit Management functionality */}
-                      {/*
-                      <Button variant="outline" size="sm">
-                        Manage Credits
-                      </Button>
-                      */}
-                      <Button size="sm">
-                        View All Clients
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Quick Actions */}
-        <Card className="relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-full blur-3xl" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2">
-              <div className="p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                <Activity className="h-5 w-5 text-primary" />
-              </div>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
               Quick Actions
-            </CardTitle>
-            <CardDescription>
+            </h2>
+            <p className="text-muted-foreground">
               {isClient ? "Manage your AI agent" : "Test and manage AI agents"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 relative">
-            <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleTestCall}>
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                <Play className="h-4 w-4 text-primary" />
-              </div>
+            </p>
+          </div>
+          <div className="space-y-3">
+            <Button className="w-full justify-start" onClick={handleTestCall}>
+              <Play className="h-4 w-4 mr-2" />
               Make Test Call
             </Button>
-            <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleCustomerData}>
-              <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-              <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                <Users className="h-4 w-4 text-primary" />
-              </div>
+            <Button className="w-full justify-start" onClick={handleCustomerData}>
+              <Users className="h-4 w-4 mr-2" />
               {isClient ? "View Call History" : "View Customer Data"}
             </Button>
             {isInternal && (
-              <Button className="w-full justify-start group relative overflow-hidden" variant="outline">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                  <Calendar className="h-4 w-4 text-primary" />
-                </div>
+              <Button className="w-full justify-start" onClick={handleScheduleMaintenance}>
+                <Calendar className="h-4 w-4 mr-2" />
                 Schedule Maintenance
               </Button>
             )}
-            {/* Future: Credit Management functionality */}
-            {/*
-            <Button className="w-full justify-start" variant="outline">
-              <CreditCard className="mr-2 h-4 w-4" />
-              {isClient ? "Top Up Credits" : "Credit Management"}
-            </Button>
-            */}
-            {isInternal && (
-              <Button className="w-full justify-start group relative overflow-hidden" variant="outline" onClick={handleSystemSettings}>
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="p-1.5 rounded-md bg-gradient-to-br from-primary/20 to-primary/10 mr-2">
-                  <Activity className="h-4 w-4 text-primary" />
-                </div>
-                System Health
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Business Information Section - Only for clients */}
         {isClient && <BusinessInfoSection />}
+      </div>
 
+      <hr className="border-border" />
+
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Live Call Monitor - Shows active calls with sentiment analysis */}
-        <Card className="lg:col-span-3 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-transparent opacity-50" />
-          <CardHeader className="relative">
-            <CardTitle className="flex items-center gap-2">
-              <div className="relative">
-                <div className="absolute inset-0 bg-primary rounded-full animate-ping opacity-75" />
-                <div className="relative p-2 rounded-full bg-gradient-to-br from-primary/20 to-primary/10">
-                  <Activity className="h-5 w-5 text-primary" />
-                </div>
-              </div>
+        <div className="space-y-6 lg:col-span-2">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Activity className="h-5 w-5 text-primary" />
               Live Call Monitoring
-            </CardTitle>
-            <CardDescription>
+            </h2>
+            <p className="text-muted-foreground">
               Real-time call tracking with AI sentiment analysis
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="relative">
-            <LiveCallMonitor clientId={client?.client_id} />
-          </CardContent>
-        </Card>
+            </p>
+          </div>
+          <LiveCallMonitor clientId={client?.client_id} />
+        </div>
 
-        {/* Recent Activity */}
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>
+        {/* Recent Activity - Real Data from Database */}
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold">Recent Activity</h2>
+            <p className="text-muted-foreground">
               {isClient ? "Your recent calls and account activity" : "Latest calls and system events"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {(isClient ? [
-                { time: "2 min ago", event: "Incoming call handled - $2.00 deducted", status: "success" },
-                { time: "8 min ago", event: "Test call completed", status: "success" },
-                { time: "15 min ago", event: "Credits topped up - $50.00 added", status: "info" },
-                { time: "32 min ago", event: "Low balance warning sent", status: "warning" },
-                { time: "1 hour ago", event: "Call completed - $2.00 deducted", status: "success" },
-              ] : [
-                { time: "2 min ago", event: "Incoming call handled", status: "success" },
-                { time: "8 min ago", event: "Test call completed", status: "success" },
-                { time: "15 min ago", event: "Customer data updated", status: "info" },
-                { time: "32 min ago", event: "New client onboarded", status: "info" },
-                { time: "1 hour ago", event: "System maintenance completed", status: "success" },
-              ]).map((activity, index) => (
-                <div key={index} className="flex items-center space-x-4 text-sm">
-                  <div className={`w-2 h-2 rounded-full ${
-                    activity.status === "success" ? "bg-green-500" : 
-                    activity.status === "info" ? "bg-blue-500" : 
-                    activity.status === "warning" ? "bg-yellow-500" : "bg-gray-400"
-                  }`} />
-                  <div className="flex-1 space-y-1">
-                    <p>{activity.event}</p>
-                    <p className="text-muted-foreground text-xs">{activity.time}</p>
+            </p>
+          </div>
+          {activitiesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            </div>
+          ) : activities.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No recent activity yet</p>
+              <p className="text-xs mt-2">Activity will appear here once calls are made</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {activities.map((activity, index) => (
+                <div key={index} className="p-4 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 ${
+                        activity.status === "success" ? "bg-green-500" :
+                        activity.status === "info" ? "bg-blue-500" :
+                        activity.status === "warning" ? "bg-yellow-500" :
+                        activity.status === "error" ? "bg-red-500" : "bg-gray-400"
+                      }`} />
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="font-medium text-sm">{activity.details?.caller || 'Unknown'}</p>
+                          <Badge variant={activity.status === "success" ? "secondary" : "destructive"} className={
+                            activity.status === "success"
+                              ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
+                              : ""
+                          }>
+                            {activity.status === "success" ? "Completed" : "Failed"}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {activity.details?.duration ? `${Math.floor(activity.details.duration / 60)}m ${activity.details.duration % 60}s` : 'N/A'}
+                          </span>
+                          {activity.details?.cost > 0 && (
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              ${activity.details.cost.toFixed(2)}
+                            </span>
+                          )}
+                          <span className="ml-auto">{activity.time}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </div>
       </div>
     </div>
   );

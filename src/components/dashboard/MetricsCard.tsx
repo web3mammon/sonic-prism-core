@@ -55,7 +55,7 @@ export function MetricsCard({
 
   return (
     <Card className={cn(
-      "font-manrope border-l-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-1",
+      "font-manrope border-l-4 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-muted/50",
       getAccentColor()
     )}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

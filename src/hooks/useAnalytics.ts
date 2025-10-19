@@ -3,13 +3,9 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface AnalyticsData {
   totalCalls: number;
-  successRate: number;
+  pickupRate: number;
   avgCallDuration: number;
-  customerSatisfaction: number;
-  peakHours: string;
-  conversionRate: number;
-  totalRevenue: number;
-  avgResponseTime: string;
+  totalCallTime: number;
   callVolumeData: Array<{ date: string; calls: number }>;
   intentDistribution: Array<{ intent: string; count: number; percentage: number }>;
 }
@@ -63,13 +59,12 @@ export function useAnalytics(clientId: string | null, dateRange: string = '7days
       const sessions = callSessions || [];
       const totalCalls = sessions.length;
       const completedCalls = sessions.filter(s => s.status === 'completed');
-      const successRate = totalCalls > 0 ? (completedCalls.length / totalCalls) * 100 : 0;
-      
-      const avgDuration = completedCalls.length > 0 
-        ? completedCalls.reduce((sum, s) => sum + (s.duration_seconds || 0), 0) / completedCalls.length
-        : 0;
+      const pickupRate = totalCalls > 0 ? (completedCalls.length / totalCalls) * 100 : 0;
 
-      const totalRevenue = sessions.reduce((sum, s) => sum + (s.cost_amount || 0), 0);
+      const totalCallTimeSeconds = completedCalls.reduce((sum, s) => sum + (s.duration_seconds || 0), 0);
+      const avgDuration = completedCalls.length > 0
+        ? totalCallTimeSeconds / completedCalls.length
+        : 0;
 
       // Generate last 7 days call volume
       const last7Days = Array.from({ length: 7 }, (_, i) => {
@@ -86,8 +81,8 @@ export function useAnalytics(clientId: string | null, dateRange: string = '7days
       // Extract REAL intent distribution from call sessions
       const intentCounts: any = {};
       sessions.forEach(s => {
-        if (s.primary_intent) {
-          const intent = s.primary_intent.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
+        if (s.intent) {
+          const intent = s.intent.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase());
           intentCounts[intent] = (intentCounts[intent] || 0) + 1;
         }
       });
@@ -98,40 +93,13 @@ export function useAnalytics(clientId: string | null, dateRange: string = '7days
         percentage: totalCalls > 0 ? Math.round((count / totalCalls) * 100) : 0
       })).sort((a, b) => b.count - a.count);
 
-      // If no intents yet, use fallback data
-      const finalIntentDistribution = intentDistribution.length > 0 ? intentDistribution : [
-        { intent: "General Inquiry", count: totalCalls, percentage: 100 }
-      ];
-
-      // Calculate peak hours from real data
-      const hourCounts: any = {};
-      sessions.forEach(s => {
-        const hour = new Date(s.created_at).getHours();
-        hourCounts[hour] = (hourCounts[hour] || 0) + 1;
-      });
-      const peakHourEntry = Object.entries(hourCounts).sort((a: any, b: any) => b[1] - a[1])[0];
-      const peakHours = peakHourEntry 
-        ? `${peakHourEntry[0]}:00 - ${parseInt(peakHourEntry[0] as string) + 1}:00`
-        : "N/A";
-
-      // Calculate customer satisfaction from sentiment scores
-      const sentimentSessions = sessions.filter(s => s.sentiment_score !== null);
-      const avgSentiment = sentimentSessions.length > 0
-        ? sentimentSessions.reduce((sum, s) => sum + s.sentiment_score, 0) / sentimentSessions.length
-        : 0;
-      const customerSatisfaction = Math.round(((avgSentiment + 1) / 2) * 5 * 10) / 10; // Convert -1 to 1 scale to 0-5 stars
-
       setAnalytics({
         totalCalls,
-        successRate: Math.round(successRate * 10) / 10,
+        pickupRate: Math.round(pickupRate * 10) / 10,
         avgCallDuration: Math.round(avgDuration / 60 * 10) / 10,
-        customerSatisfaction,
-        peakHours,
-        conversionRate: Math.round(successRate * 0.8 * 10) / 10,
-        totalRevenue: Math.round(totalRevenue * 100) / 100,
-        avgResponseTime: "1.8 sec",
+        totalCallTime: Math.round(totalCallTimeSeconds / 60 * 10) / 10,
         callVolumeData,
-        intentDistribution: finalIntentDistribution
+        intentDistribution
       });
 
       setError(null);

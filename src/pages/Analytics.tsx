@@ -1,19 +1,14 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricsCard } from "@/components/dashboard/MetricsCard";
 import {
-  BarChart3,
   TrendingUp,
   Phone,
   Clock,
-  Users,
   Target,
   Calendar,
-  DollarSign,
   Loader2,
-  Download,
-  ArrowRight
+  Download
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +22,6 @@ import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAnalytics } from "@/hooks/useAnalytics";
 
 export default function Analytics() {
-  const navigate = useNavigate();
   const [dateRange, setDateRange] = useState("7days");
   const { client, loading: clientLoading } = useCurrentClient();
   const { analytics, loading: analyticsLoading, error } = useAnalytics(client?.client_id || null, dateRange);
@@ -40,12 +34,9 @@ export default function Analytics() {
       ['Business Name', client.business_name],
       ['Date Range', dateRange],
       ['Total Calls', analytics.totalCalls.toString()],
-      ['Success Rate', `${analytics.successRate}%`],
+      ['Pickup Rate', `${analytics.pickupRate}%`],
       ['Average Call Duration', `${analytics.avgCallDuration} min`],
-      ['Customer Satisfaction', `${analytics.customerSatisfaction}/5.0`],
-      ['Total Revenue', `$${analytics.totalRevenue}`],
-      ['Conversion Rate', `${analytics.conversionRate}%`],
-      ['Peak Hours', analytics.peakHours],
+      ['Total Call Time', `${analytics.totalCallTime} min`],
     ].map(row => row.join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -74,12 +65,12 @@ export default function Analytics() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 font-manrope">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="space-y-2">
           <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
           <p className="text-muted-foreground">
-            Comprehensive insights into your AI agent's performance
+            Real-time call metrics and performance data
           </p>
         </div>
         <div className="flex space-x-2">
@@ -99,11 +90,6 @@ export default function Analytics() {
             <Download className="mr-2 h-4 w-4" />
             Export Report
           </Button>
-          <Button onClick={() => navigate('advanced')}>
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Advanced Analytics
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
         </div>
       </div>
 
@@ -113,13 +99,13 @@ export default function Analytics() {
           title="Total Calls"
           value={analytics.totalCalls.toLocaleString()}
           icon={Phone}
-          subtitle="total calls"
+          subtitle="all calls received"
         />
         <MetricsCard
-          title="Success Rate"
-          value={`${analytics.successRate}%`}
+          title="Pickup Rate"
+          value={`${analytics.pickupRate}%`}
           icon={Target}
-          subtitle="calls completed"
+          subtitle="calls answered by AI"
         />
         <MetricsCard
           title="Avg Call Duration"
@@ -127,84 +113,59 @@ export default function Analytics() {
           icon={Clock}
           subtitle="average duration"
         />
-        {/* TODO: Implement customer satisfaction tracking
         <MetricsCard
-          title="Customer Satisfaction"
-          value={`${analytics.customerSatisfaction}/5.0`}
-          changeType="positive"
-          icon={Users}
-          subtitle="rating score"
+          title="Total Call Time"
+          value={`${analytics.totalCallTime} min`}
+          icon={TrendingUp}
+          subtitle="total time on calls"
         />
-        */}
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Call Volume Trend */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Call Volume Trend</CardTitle>
-            <CardDescription>
-              Daily call volume over the past week
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {analytics.callVolumeData.map((day, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{day.date}</span>
-                  <div className="flex items-center space-x-2 flex-1 ml-4">
-                    <div className="flex-1 bg-muted rounded-full h-2">
-                      <div 
-                        className="bg-primary h-2 rounded-full" 
-                        style={{ width: `${Math.max(day.calls / Math.max(...analytics.callVolumeData.map(d => d.calls), 1) * 100, 5)}%` }}
-                      />
+      <hr className="border-border" />
+
+      {/* Call Volume Trend - Full Width */}
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold">Call Volume Trend</h2>
+          <p className="text-muted-foreground">
+            Daily call volume over the selected period
+          </p>
+        </div>
+        <div className="space-y-4">
+          {/* Vertical Bar Chart */}
+          <div className="h-64 flex items-end justify-between gap-2 relative">
+            {analytics.callVolumeData.map((day, index) => {
+              const maxCalls = Math.max(...analytics.callVolumeData.map(d => d.calls), 1);
+              const heightPercent = Math.max((day.calls / maxCalls) * 100, 8);
+
+              return (
+                <div key={index} className="flex-1 flex flex-col items-center justify-end h-full gap-2 pb-6">
+                  {/* Bar */}
+                  <div className="w-full relative group flex items-end" style={{ height: `${heightPercent}%` }}>
+                    <div
+                      className="w-full bg-primary rounded-t-md hover:bg-primary/80 transition-all cursor-pointer h-full"
+                    >
+                      {/* Tooltip on hover */}
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-popover px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg border z-10">
+                        {day.calls} calls
+                      </div>
                     </div>
-                    <span className="text-sm text-muted-foreground w-12 text-right">
-                      {day.calls}
-                    </span>
                   </div>
+
+                  {/* Date label */}
+                  <span className="text-xs text-muted-foreground text-center whitespace-nowrap absolute bottom-0">
+                    {day.date}
+                  </span>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
-        {/* Performance Summary */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance Summary</CardTitle>
-            <CardDescription>
-              Key performance indicators
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              {/* TODO: Calculate peak hours from call timestamps
-              <div className="flex justify-between text-sm">
-                <span>Peak Hours</span>
-                <span className="font-medium">{analytics.peakHours}</span>
-              </div>
-              */}
-              <div className="flex justify-between text-sm">
-                <span>Conversion Rate</span>
-                <span className="font-medium text-green-600">{analytics.conversionRate}%</span>
-              </div>
-              {/* TODO: Track voice stream timing data
-              <div className="flex justify-between text-sm">
-                <span>Avg Response Time</span>
-                <span className="font-medium">{analytics.avgResponseTime}</span>
-              </div>
-              */}
-              <div className="flex justify-between text-sm">
-                <span>Total Revenue</span>
-                <span className="font-medium">${analytics.totalRevenue}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* TODO: Implement NLP Intent Analysis
-        <Card className="lg:col-span-3">
+      {/* Call Intent Distribution - only show if we have intent data */}
+      {analytics.intentDistribution && analytics.intentDistribution.length > 0 && (
+        <Card className="bg-muted/50">
           <CardHeader>
             <CardTitle>Call Intent Distribution</CardTitle>
             <CardDescription>
@@ -212,13 +173,13 @@ export default function Analytics() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {analytics.intentDistribution.map((item, index) => (
                 <div key={index} className="space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{item.intent}</span>
                     <div className="flex items-center space-x-2">
-                      <span className="text-muted-foreground">{item.count} calls</span>
+                      <span className="text-muted-foreground">{item.count}</span>
                       <span className="font-medium">{item.percentage}%</span>
                     </div>
                   </div>
@@ -233,89 +194,7 @@ export default function Analytics() {
             </div>
           </CardContent>
         </Card>
-        */}
-      </div>
-
-      {/* TODO: Implement AI-powered insights and recommendations
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Weekly Insights</CardTitle>
-            <CardDescription>
-              Automated insights from your call data
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-start space-x-3">
-                <TrendingUp className="h-5 w-5 text-green-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Peak Performance Day</p>
-                  <p className="text-sm text-muted-foreground">
-                    Saturday showed the highest success rate at 96.8%
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <BarChart3 className="h-5 w-5 text-blue-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Call Volume Increase</p>
-                  <p className="text-sm text-muted-foreground">
-                    15% increase in emergency service calls this week
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-start space-x-3">
-                <DollarSign className="h-5 w-5 text-purple-500 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Revenue Impact</p>
-                  <p className="text-sm text-muted-foreground">
-                    Quote requests generated $1,240 in potential revenue
-                  </p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Recommendations</CardTitle>
-            <CardDescription>
-              AI-powered suggestions to improve performance
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                  Optimize Peak Hours
-                </p>
-                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
-                  Consider increasing capacity during 10 AM - 2 PM to handle higher call volume
-                </p>
-              </div>
-              <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                <p className="text-sm font-medium text-green-800 dark:text-green-200">
-                  Improve Emergency Response
-                </p>
-                <p className="text-sm text-green-700 dark:text-green-300 mt-1">
-                  Emergency calls have 98% success rate - consider promoting this feature
-                </p>
-              </div>
-              <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                  Address Complaint Patterns
-                </p>
-                <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-                  Review complaint call transcripts to identify common issues
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-      */}
+      )}
     </div>
   );
 }

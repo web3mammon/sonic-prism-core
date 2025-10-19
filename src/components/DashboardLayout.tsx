@@ -1,6 +1,7 @@
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Footer } from "@/components/Footer";
 import { useBusiness } from "@/lib/theme";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
@@ -93,6 +94,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <main className="flex-1 p-6">
           {children}
         </main>
+        <Footer />
       </div>
     );
   }
@@ -140,6 +142,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <main className="flex-1 p-6">
             {children}
           </main>
+          <Footer />
         </div>
       </div>
     </SidebarProvider>

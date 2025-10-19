@@ -211,21 +211,9 @@ export default function BusinessDetails() {
         </div>
       </div>
 
-      {/* Client Status Badge */}
-      {client && (
-        <div className="flex items-center gap-2">
-          <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
-            {client.status}
-          </Badge>
-          <span className="text-sm text-muted-foreground">
-            Voice AI Client: {client.client_id}
-          </span>
-        </div>
-      )}
-
       <div className="grid gap-6 md:grid-cols-2">
         {/* Basic Information */}
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Building2 className="h-5 w-5" />
@@ -306,7 +294,7 @@ export default function BusinessDetails() {
         </Card>
 
         {/* Location & Service Area */}
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MapPin className="h-5 w-5" />
@@ -353,7 +341,7 @@ export default function BusinessDetails() {
         </Card>
 
         {/* Business Hours */}
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
@@ -384,7 +372,7 @@ export default function BusinessDetails() {
         </Card>
 
         {/* Services & Pricing */}
-        <Card>
+        <Card className="bg-muted/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle className="h-5 w-5" />

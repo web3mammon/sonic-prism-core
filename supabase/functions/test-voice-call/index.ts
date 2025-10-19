@@ -77,8 +77,10 @@ Deno.serve(async (req) => {
     // Don't create TwiML here! Use the SAME webhook endpoint as real calls
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const webhookUrl = `${SUPABASE_URL}/functions/v1/twilio-webhook/voice`;
+    const statusCallbackUrl = `${SUPABASE_URL}/functions/v1/twilio-webhook/status`;
 
     console.log('🔗 [TEST-CALL] Will use webhook URL:', webhookUrl);
+    console.log('🔗 [TEST-CALL] Status callback URL:', statusCallbackUrl);
 
     // Initiate outbound call via Twilio - point to our REAL webhook
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Calls.json`;
@@ -89,7 +91,9 @@ Deno.serve(async (req) => {
       To: phoneNumber,
       Url: webhookUrl,  // Use Url (not Twiml) to point to our webhook
       Method: 'POST',
-      // No StatusCallback - FastAPI doesn't use it either
+      StatusCallback: statusCallbackUrl,  // ✅ CRITICAL: Twilio will POST here when call ends
+      StatusCallbackEvent: 'completed',  // Only notify on call completion (not initiated/ringing/answered)
+      StatusCallbackMethod: 'POST',
     });
 
     console.log('Making Twilio API call from', client.phone_number, 'to', phoneNumber);
