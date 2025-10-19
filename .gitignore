@@ -19,7 +19,10 @@ __pycache__/
 .env
 .env.*
 
-# Exclude frontend build artifacts
+# Exclude build artifacts and dependencies
+node_modules/
+dist/
+.vite/
 /frontend/node_modules/
 /frontend/dist/
 /frontend/.vite/
