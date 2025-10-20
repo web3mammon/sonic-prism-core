@@ -89,7 +89,7 @@ export default function AudioFiles() {
       {/* Audio Files Management */}
       <Card>
         <CardHeader>
-          <CardTitle>Audio Snippets</CardTitle>
+          <CardTitle className="font-extralight">Audio Snippets</CardTitle>
           <CardDescription>
             Audio files in telephony format (.ulaw) used during live calls. Download to review.
           </CardDescription>

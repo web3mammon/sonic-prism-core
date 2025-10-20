@@ -135,7 +135,7 @@ export default function AdvancedAnalytics() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <CardTitle className="text-sm font-extralight flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
               Avg Sentiment
             </CardTitle>
@@ -152,7 +152,7 @@ export default function AdvancedAnalytics() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <CardTitle className="text-sm font-extralight flex items-center gap-2">
               <Target className="h-4 w-4" />
               Conversion Rate
             </CardTitle>
@@ -169,7 +169,7 @@ export default function AdvancedAnalytics() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <CardTitle className="text-sm font-extralight flex items-center gap-2">
               <DollarSign className="h-4 w-4" />
               Revenue Forecast (30d)
             </CardTitle>
@@ -186,7 +186,7 @@ export default function AdvancedAnalytics() {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <CardTitle className="text-sm font-extralight flex items-center gap-2">
               <Users className="h-4 w-4" />
               Repeat Rate
             </CardTitle>
@@ -214,7 +214,7 @@ export default function AdvancedAnalytics() {
         <TabsContent value="sentiment" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Sentiment Trends Over Time</CardTitle>
+              <CardTitle className="font-extralight">Sentiment Trends Over Time</CardTitle>
               <CardDescription>Track customer satisfaction across your calls</CardDescription>
             </CardHeader>
             <CardContent>
@@ -240,7 +240,7 @@ export default function AdvancedAnalytics() {
           <div className="grid grid-cols-3 gap-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Positive</CardTitle>
+                <CardTitle className="text-sm font-extralight">Positive</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-green-600 dark:text-green-400">
@@ -251,7 +251,7 @@ export default function AdvancedAnalytics() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Neutral</CardTitle>
+                <CardTitle className="text-sm font-extralight">Neutral</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
@@ -262,7 +262,7 @@ export default function AdvancedAnalytics() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm">Negative</CardTitle>
+                <CardTitle className="text-sm font-extralight">Negative</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-red-600 dark:text-red-400">
@@ -277,7 +277,7 @@ export default function AdvancedAnalytics() {
         <TabsContent value="intent" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Customer Intent Distribution</CardTitle>
+              <CardTitle className="font-extralight">Customer Intent Distribution</CardTitle>
               <CardDescription>Understand why customers are calling</CardDescription>
             </CardHeader>
             <CardContent>
@@ -307,7 +307,7 @@ export default function AdvancedAnalytics() {
         <TabsContent value="funnel" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Conversation Funnel</CardTitle>
+              <CardTitle className="font-extralight">Conversation Funnel</CardTitle>
               <CardDescription>Track customer journey through conversation stages</CardDescription>
             </CardHeader>
             <CardContent>
@@ -332,7 +332,7 @@ export default function AdvancedAnalytics() {
         <TabsContent value="timing" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Call Volume by Hour</CardTitle>
+              <CardTitle className="font-extralight">Call Volume by Hour</CardTitle>
               <CardDescription>Identify peak calling hours to optimize staffing</CardDescription>
             </CardHeader>
             <CardContent>

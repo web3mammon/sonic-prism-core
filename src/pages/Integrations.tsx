@@ -96,9 +96,15 @@ export default function Integrations() {
   }
 
   return (
-    <div className="space-y-6 p-6 font-manrope">
+    <div className="space-y-6 p-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Integrations</h1>
+        <h1 className="text-5xl font-extralight mb-2">Integrations</h1>
         <p className="text-muted-foreground">
           Connect your business tools to automate voice AI workflows
         </p>
@@ -121,7 +127,7 @@ export default function Integrations() {
                   {integration.icon}
                 </div>
                 <div className="flex-1">
-                  <CardTitle className="text-xl">{integration.name}</CardTitle>
+                  <CardTitle className="text-xl font-extralight">{integration.name}</CardTitle>
                 </div>
               </div>
               <CardDescription className="mt-2">
@@ -181,7 +187,7 @@ export default function Integrations() {
       {/* Need Help Section */}
       <div className="space-y-4">
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
+          <h2 className="text-2xl font-extralight flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-primary" />
             Need Help?
           </h2>

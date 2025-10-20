@@ -65,10 +65,16 @@ export default function Analytics() {
   }
 
   return (
-    <div className="space-y-6 p-6 font-manrope">
+    <div className="space-y-6 p-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       <div className="flex items-center justify-between">
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Analytics Dashboard</h1>
+          <h1 className="text-5xl font-extralight mb-2">Analytics Dashboard</h1>
           <p className="text-muted-foreground">
             Real-time call metrics and performance data
           </p>
@@ -126,7 +132,7 @@ export default function Analytics() {
       {/* Call Volume Trend - Full Width */}
       <div className="space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold">Call Volume Trend</h2>
+          <h2 className="text-2xl font-extralight">Call Volume Trend</h2>
           <p className="text-muted-foreground">
             Daily call volume over the selected period
           </p>
@@ -167,7 +173,7 @@ export default function Analytics() {
       {analytics.intentDistribution && analytics.intentDistribution.length > 0 && (
         <Card className="bg-muted/50">
           <CardHeader>
-            <CardTitle>Call Intent Distribution</CardTitle>
+            <CardTitle className="font-extralight">Call Intent Distribution</CardTitle>
             <CardDescription>
               Breakdown of call types and their frequency
             </CardDescription>

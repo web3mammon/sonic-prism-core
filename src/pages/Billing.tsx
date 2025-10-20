@@ -83,9 +83,15 @@ export default function Billing() {
   }
 
   return (
-    <div className="space-y-6 p-6 font-manrope">
+    <div className="space-y-6 p-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Billing & Credits</h1>
+        <h1 className="text-5xl font-extralight mb-2">Billing & Credits</h1>
         <p className="text-muted-foreground">
           Manage your credits and payment methods
         </p>
@@ -98,7 +104,7 @@ export default function Billing() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold">Available Calls</h2>
+                <h2 className="text-2xl font-extralight">Available Calls</h2>
               </div>
               <Badge className={subscriptionActive ? "bg-green-500" : "bg-gray-500"}>
                 {subscriptionActive ? (
@@ -183,7 +189,7 @@ export default function Billing() {
         {/* Right: Add Credits - Slider Based */}
         <div className="space-y-6 pt-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Add Credits</h2>
+            <h2 className="text-2xl font-extralight">Add Credits</h2>
             <p className="text-muted-foreground">
               Purchase credits for additional calls beyond your subscription
             </p>
@@ -269,7 +275,7 @@ export default function Billing() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
+            <h2 className="text-2xl font-extralight flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
               Payment & Invoices
             </h2>

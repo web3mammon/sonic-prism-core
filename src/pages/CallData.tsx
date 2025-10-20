@@ -180,9 +180,15 @@ export default function CallData() {
 
 
   return (
-    <div className="space-y-6 p-6 font-manrope">
+    <div className="space-y-6 p-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Call Data</h1>
+        <h1 className="text-5xl font-extralight mb-2">Call Data</h1>
         <p className="text-muted-foreground">
           View and analyze all incoming calls handled by your AI agent
         </p>
@@ -191,7 +197,7 @@ export default function CallData() {
       {/* Filters and Search */}
       <Card className="bg-muted/50">
         <CardHeader>
-          <CardTitle>Call History</CardTitle>
+          <CardTitle className="font-extralight">Call History</CardTitle>
           <CardDescription>
             Search and filter through your call records
           </CardDescription>

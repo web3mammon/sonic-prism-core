@@ -108,16 +108,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <header className="h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-6">
             <div className="flex items-center space-x-4">
               <SidebarTrigger />
-              <div className="flex flex-col">
-                <h1 className="text-xl font-semibold">{headerTitle}</h1>
-                {isValid && (
-                  <span className="text-xs text-muted-foreground">
-                    {region.toUpperCase()} • {industry.toUpperCase()}
-                  </span>
-                )}
-              </div>
             </div>
-            
+
             <div className="flex items-center space-x-3">
               {profile && (
                 <div className="flex items-center space-x-2">

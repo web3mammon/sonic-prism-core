@@ -173,11 +173,17 @@ export default function BusinessDetails() {
   }
 
   return (
-    <div className="space-y-6 font-manrope">
+    <div className="space-y-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Business Details</h1>
+          <h1 className="text-5xl font-extralight mb-2">Business Details</h1>
           <p className="text-muted-foreground">
             Manage your business information and service details
           </p>
@@ -215,7 +221,7 @@ export default function BusinessDetails() {
         {/* Basic Information */}
         <Card className="bg-muted/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 font-extralight">
               <Building2 className="h-5 w-5" />
               Basic Information
             </CardTitle>
@@ -296,7 +302,7 @@ export default function BusinessDetails() {
         {/* Location & Service Area */}
         <Card className="bg-muted/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 font-extralight">
               <MapPin className="h-5 w-5" />
               Location & Service Area
             </CardTitle>
@@ -343,7 +349,7 @@ export default function BusinessDetails() {
         {/* Business Hours */}
         <Card className="bg-muted/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 font-extralight">
               <Clock className="h-5 w-5" />
               Operating Hours
             </CardTitle>
@@ -374,7 +380,7 @@ export default function BusinessDetails() {
         {/* Services & Pricing */}
         <Card className="bg-muted/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 font-extralight">
               <CheckCircle className="h-5 w-5" />
               Services & Pricing
             </CardTitle>

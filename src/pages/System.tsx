@@ -197,7 +197,7 @@ export default function System() {
         {/* System Metrics */}
         <Card>
           <CardHeader>
-            <CardTitle>System Metrics</CardTitle>
+            <CardTitle className="font-extralight">System Metrics</CardTitle>
             <CardDescription>
               Real-time system resource utilization
             </CardDescription>
@@ -263,7 +263,7 @@ export default function System() {
         {/* System Controls */}
         <Card>
           <CardHeader>
-            <CardTitle>System Controls</CardTitle>
+            <CardTitle className="font-extralight">System Controls</CardTitle>
             <CardDescription>
               Manage system settings and maintenance
             </CardDescription>
@@ -317,7 +317,7 @@ export default function System() {
         {/* Services Status */}
         <Card>
           <CardHeader>
-            <CardTitle>Service Status</CardTitle>
+            <CardTitle className="font-extralight">Service Status</CardTitle>
             <CardDescription>
               Monitor individual service health and uptime
             </CardDescription>
@@ -346,7 +346,7 @@ export default function System() {
         {/* External Integrations */}
         <Card>
           <CardHeader>
-            <CardTitle>External Integrations</CardTitle>
+            <CardTitle className="font-extralight">External Integrations</CardTitle>
             <CardDescription>
               Monitor third-party service connections
             </CardDescription>

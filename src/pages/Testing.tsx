@@ -191,9 +191,15 @@ export default function Testing() {
   const currentCalls = testHistory.slice(startIndex, endIndex);
 
   return (
-    <div className="space-y-6 p-6 font-manrope">
+    <div className="space-y-6 p-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Testing Suite</h1>
+        <h1 className="text-5xl font-extralight mb-2">Testing Suite</h1>
         <p className="text-muted-foreground">
           Test your voice AI agent with custom scenarios and phone numbers
         </p>
@@ -203,7 +209,7 @@ export default function Testing() {
         {/* Test Call Interface */}
         <Card className="bg-muted/50">
           <CardHeader>
-            <CardTitle className="font-bold">Manual Test Call</CardTitle>
+            <CardTitle className="font-extralight">Manual Test Call</CardTitle>
             <CardDescription>
               Initiate a test call to validate your AI agent's performance
             </CardDescription>
@@ -264,7 +270,7 @@ export default function Testing() {
         {/* Recent Test Calls */}
         <div className="space-y-6 pt-6">
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Recent Test Calls</h2>
+            <h2 className="text-2xl font-extralight">Recent Test Calls</h2>
             <p className="text-muted-foreground">
               History of your test calls - updates in real-time
             </p>

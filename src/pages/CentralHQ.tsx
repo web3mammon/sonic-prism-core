@@ -263,11 +263,17 @@ const CentralHQ = () => {
   };
 
   return (
-    <div className="space-y-8 font-manrope">
+    <div className="space-y-8 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Central HQ</h1>
+          <h1 className="text-5xl font-extralight mb-2">Central HQ</h1>
           <p className="text-muted-foreground">
             Live system overview and client management console
           </p>
@@ -284,7 +290,7 @@ const CentralHQ = () => {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+            <CardTitle className="text-sm font-extralight">Total Clients</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -297,7 +303,7 @@ const CentralHQ = () => {
 
         <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Clients</CardTitle>
+            <CardTitle className="text-sm font-extralight">Active Clients</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -310,7 +316,7 @@ const CentralHQ = () => {
 
         <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Calls Today</CardTitle>
+            <CardTitle className="text-sm font-extralight">Calls Today</CardTitle>
             <Phone className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -323,7 +329,7 @@ const CentralHQ = () => {
 
         <Card className="bg-muted/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue Today</CardTitle>
+            <CardTitle className="text-sm font-extralight">Revenue Today</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -338,7 +344,7 @@ const CentralHQ = () => {
       {/* Client Management */}
       <div className="space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold">Client Management</h2>
+          <h2 className="text-2xl font-extralight">Client Management</h2>
           <p className="text-muted-foreground">
             Search and manage all client accounts ({clients.length} total, {systemMetrics.activeClients} active)
           </p>

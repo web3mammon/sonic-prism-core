@@ -4,7 +4,6 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { MetricsCard } from "@/components/dashboard/MetricsCard";
-import { NotificationBanner } from "@/components/NotificationBanner";
 import { LiveDemoSection } from "@/components/LiveDemoSection";
 import { BusinessInfoSection } from "@/components/BusinessInfoSection";
 import { LiveCallMonitor } from "@/components/voice-ai/LiveCallMonitor";
@@ -139,10 +138,13 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6 font-manrope">
-      {/* Dynamic Notification Banner */}
-      <NotificationBanner />
-      
+    <div className="space-y-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       {/* Low Balance Warning */}
       {isLowBalance && (
         <Alert className="border-destructive bg-destructive/10">
@@ -159,17 +161,9 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">
+          <h1 className="text-5xl font-extralight mb-6">
             {client.business_name} Dashboard
           </h1>
-          <div className="flex items-center gap-2 mt-2">
-            <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
-              {client.status}
-            </Badge>
-            <span className="text-sm text-muted-foreground">
-              Client ID: {client.client_id}
-            </span>
-          </div>
         </div>
         <div className="flex space-x-2">
           <Button variant="outline" size="sm" onClick={handleTestCall}>
@@ -186,46 +180,99 @@ export default function Dashboard() {
       {/* Live Demo Section - Only for clients */}
       {isClient && <LiveDemoSection />}
 
-      {/* Metrics Grid */}
-      <div className="grid gap-4 md:grid-cols-3 animate-fade-in">
-        <MetricsCard
-          title="Credit Balance"
-          value={`${creditData.currencySymbol}${creditData.balance.toFixed(2)}`}
-          subtitle={`≈ ${Math.floor(creditData.balance / 2.00)} calls remaining`}
-          icon={DollarSign}
-          changeType={isLowBalance ? "negative" : "positive"}
-        />
-        <MetricsCard
-          title="Calls This Month"
-          value={creditData.callsThisMonth.toLocaleString()}
-          icon={Phone}
-          subtitle="this month"
-        />
-        <MetricsCard
-          title="Calls Remaining"
-          value={Math.floor(creditData.balance / 2.00).toLocaleString()}
-          subtitle="at $2.00 per call"
-          icon={Clock}
-        />
-      </div>
+      {/* Main Dashboard Grid: 2x2 Cards + Credit Balance */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Left: 2x2 Metrics Cards */}
+        <div className="lg:col-span-2 grid gap-4 grid-cols-2 animate-fade-in">
+        {/* Calls This Month - Blue */}
+        <Card className="font-manrope border-l-4 border-l-blue-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-blue-50/75 dark:bg-blue-950/30 flex flex-col justify-between min-h-[160px]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Calls This Month
+            </CardTitle>
+            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30">
+              <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-5xl font-extralight text-blue-700 dark:text-blue-300">
+              {creditData.callsThisMonth.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">total calls</p>
+          </CardContent>
+        </Card>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Credit Balance & Usage */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
+        {/* Calls Remaining - Green */}
+        <Card className="font-manrope border-l-4 border-l-green-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-green-50/75 dark:bg-green-950/30 flex flex-col justify-between min-h-[160px]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Calls Remaining
+            </CardTitle>
+            <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
+              <Clock className="h-4 w-4 text-green-600 dark:text-green-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-5xl font-extralight text-green-700 dark:text-green-300">
+              {Math.floor(creditData.balance / 2.00).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">at $2.00 per call</p>
+          </CardContent>
+        </Card>
+
+        {/* Avg Call Duration - Purple */}
+        <Card className="font-manrope border-l-4 border-l-purple-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-purple-50/75 dark:bg-purple-950/30 flex flex-col justify-between min-h-[160px]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Avg Call Duration
+            </CardTitle>
+            <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30">
+              <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-5xl font-extralight text-purple-700 dark:text-purple-300">
+              {stats?.avgDurationSeconds ? `${(stats.avgDurationSeconds / 60).toFixed(1)} min` : '0 min'}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">average duration</p>
+          </CardContent>
+        </Card>
+
+        {/* Next Billing Date - Amber */}
+        <Card className="font-manrope border-l-4 border-l-amber-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-amber-50/75 dark:bg-amber-950/30 flex flex-col justify-between min-h-[160px]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Next Billing Date
+            </CardTitle>
+            <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
+              <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-5xl font-extralight text-amber-700 dark:text-amber-300">
+              {new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">upcoming charge</p>
+          </CardContent>
+        </Card>
+        </div>
+
+        {/* Right: Credit Balance Section */}
+        <Card className="bg-muted/50">
+          <CardHeader>
+            <CardTitle className="text-2xl font-extralight flex items-center gap-2">
               <CreditCard className="h-5 w-5 text-primary" />
               Credit Balance
               {isLowBalance && <Badge variant="destructive" className="text-xs animate-pulse">Low Balance</Badge>}
-            </h2>
-            <p className="text-muted-foreground">
+            </CardTitle>
+            <CardDescription>
               Your current credit balance and call usage
-            </p>
-          </div>
-          <div className="space-y-6">
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
             {/* Credit Balance Display */}
-            <div className="text-center p-8 rounded-lg bg-muted/50">
-              <div className="text-5xl font-bold text-primary mb-3">
+            <div className="text-center p-8 rounded-lg bg-background/50">
+              <div className="text-5xl font-extralight text-primary mb-3">
                 {creditData.currencySymbol}{creditData.balance.toFixed(2)}
               </div>
               <div className="text-lg text-muted-foreground mb-1">{creditData.currency}</div>
@@ -246,7 +293,7 @@ export default function Dashboard() {
                 </div>
                 <div className="relative">
                   <Progress value={callsUsedPercentage} className="h-3" />
-                  <div 
+                  <div
                     className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500"
                     style={{ width: `${callsUsedPercentage}%` }}
                   />
@@ -271,49 +318,20 @@ export default function Dashboard() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <Activity className="h-5 w-5 text-primary" />
-              Quick Actions
-            </h2>
-            <p className="text-muted-foreground">
-              {isClient ? "Manage your AI agent" : "Test and manage AI agents"}
-            </p>
-          </div>
-          <div className="space-y-3">
-            <Button className="w-full justify-start" onClick={handleTestCall}>
-              <Play className="h-4 w-4 mr-2" />
-              Make Test Call
-            </Button>
-            <Button className="w-full justify-start" onClick={handleCustomerData}>
-              <Users className="h-4 w-4 mr-2" />
-              {isClient ? "View Call History" : "View Customer Data"}
-            </Button>
-            {isInternal && (
-              <Button className="w-full justify-start" onClick={handleScheduleMaintenance}>
-                <Calendar className="h-4 w-4 mr-2" />
-                Schedule Maintenance
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Business Information Section - Only for clients */}
-        {isClient && <BusinessInfoSection />}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Business Information Section - Only for clients */}
+      {isClient && <BusinessInfoSection />}
 
       <hr className="border-border" />
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Live Call Monitor - Shows active calls with sentiment analysis */}
         <div className="space-y-6 lg:col-span-2">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
+          <div className="space-y-2 pt-8">
+            <h2 className="text-2xl font-extralight flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />
               Live Call Monitoring
             </h2>
@@ -326,8 +344,11 @@ export default function Dashboard() {
 
         {/* Recent Activity - Real Data from Database */}
         <div className="space-y-6">
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Recent Activity</h2>
+          <div className="space-y-2 pt-8">
+            <h2 className="text-2xl font-extralight flex items-center gap-2">
+              <Clock className="h-5 w-5 text-primary" />
+              Recent Activity
+            </h2>
             <p className="text-muted-foreground">
               {isClient ? "Your recent calls and account activity" : "Latest calls and system events"}
             </p>

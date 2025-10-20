@@ -109,9 +109,15 @@ export default function Logs() {
   }
 
   return (
-    <div className="space-y-6 p-6 font-manrope">
+    <div className="space-y-6 p-6 font-manrope relative">
+      {/* Subtle background pattern */}
+      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      }}></div>
+
       <div className="space-y-2">
-        <h1 className="text-3xl font-bold">Call Conversation Logs</h1>
+        <h1 className="text-5xl font-extralight mb-2">Call Conversation Logs</h1>
         <p className="text-muted-foreground">
           View detailed conversation transcripts and interactions
         </p>
@@ -120,45 +126,45 @@ export default function Logs() {
       {/* Summary Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="bg-muted/50">
-          <CardContent className="p-4">
+          <CardContent className="p-6">
             <div className="flex items-center space-x-3">
               <Phone className="h-5 w-5 text-blue-500" />
               <div>
-                <p className="text-2xl font-bold">{uniqueCallSids.length}</p>
-                <p className="text-sm text-muted-foreground">Total Calls</p>
+                <p className="text-5xl font-extralight">{uniqueCallSids.length}</p>
+                <p className="text-sm text-muted-foreground mt-2">Total Calls</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card className="bg-muted/50">
-          <CardContent className="p-4">
+          <CardContent className="p-6">
             <div className="flex items-center space-x-3">
               <MessageSquare className="h-5 w-5 text-green-500" />
               <div>
-                <p className="text-2xl font-bold">{logs.length}</p>
-                <p className="text-sm text-muted-foreground">Messages</p>
+                <p className="text-5xl font-extralight">{logs.length}</p>
+                <p className="text-sm text-muted-foreground mt-2">Messages</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card className="bg-muted/50">
-          <CardContent className="p-4">
+          <CardContent className="p-6">
             <div className="flex items-center space-x-3">
               <User className="h-5 w-5 text-purple-500" />
               <div>
-                <p className="text-2xl font-bold">{logs.filter(l => l.speaker === 'user').length}</p>
-                <p className="text-sm text-muted-foreground">User Messages</p>
+                <p className="text-5xl font-extralight">{logs.filter(l => l.speaker === 'user').length}</p>
+                <p className="text-sm text-muted-foreground mt-2">User Messages</p>
               </div>
             </div>
           </CardContent>
         </Card>
         <Card className="bg-muted/50">
-          <CardContent className="p-4">
+          <CardContent className="p-6">
             <div className="flex items-center space-x-3">
               <Bot className="h-5 w-5 text-orange-500" />
               <div>
-                <p className="text-2xl font-bold">{logs.filter(l => l.speaker === 'assistant').length}</p>
-                <p className="text-sm text-muted-foreground">AI Responses</p>
+                <p className="text-5xl font-extralight">{logs.filter(l => l.speaker === 'assistant').length}</p>
+                <p className="text-sm text-muted-foreground mt-2">AI Responses</p>
               </div>
             </div>
           </CardContent>
@@ -170,7 +176,7 @@ export default function Logs() {
       {/* Log Viewer */}
       <div className="space-y-6">
         <div className="space-y-2">
-          <h2 className="text-2xl font-bold">Conversation Logs</h2>
+          <h2 className="text-2xl font-extralight">Conversation Logs</h2>
           <p className="text-muted-foreground">
             Real-time conversation transcripts from your Voice AI calls
           </p>

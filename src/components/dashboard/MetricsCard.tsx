@@ -72,10 +72,10 @@ export function MetricsCard({
         )}
       </CardHeader>
       <CardContent>
-        <div className="text-3xl font-bold bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
+        <div className="text-5xl font-extralight bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
           {value}
         </div>
-        <div className="flex items-center space-x-2 mt-3">
+        <div className="flex items-center space-x-2 mt-2">
           {change && (
             <Badge variant="secondary" className={cn("transition-all", getChangeColor())}>
               {change}
