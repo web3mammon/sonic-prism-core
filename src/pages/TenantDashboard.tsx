@@ -64,10 +64,10 @@ export default function Dashboard() {
     callsRemaining: stats?.callsRemaining || 0,
     callsThisMonth: stats?.callsThisMonth || 0,
     averageCallCost: 2.00, // Always $2 per call (USP)
-    lowBalanceThreshold: 10
+    lowBalanceThreshold: 5 // Warn when 5 or fewer calls remaining
   };
 
-  const isLowBalance = creditData.balance <= creditData.lowBalanceThreshold;
+  const isLowBalance = creditData.callsRemaining <= creditData.lowBalanceThreshold;
   const balancePercentage = Math.min((creditData.balance / 100) * 100, 100);
   const callsUsedPercentage = creditData.callsThisMonth > 0
     ? ((creditData.callsThisMonth / (creditData.callsThisMonth + creditData.callsRemaining)) * 100)
@@ -150,9 +150,9 @@ export default function Dashboard() {
         <Alert className="border-destructive bg-destructive/10">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="font-medium">
-            <span className="text-destructive">Low balance warning:</span> You have {creditData.currencySymbol}{creditData.balance.toFixed(2)} remaining (approx. {Math.floor(creditData.balance / creditData.averageCallCost)} calls).
-            <Button variant="link" className="text-destructive font-medium p-0 ml-1 h-auto" onClick={handleTopUp}>
-              Top up now to continue service
+            <span className="text-destructive">Call limits approaching.</span> You have {creditData.callsRemaining} call{creditData.callsRemaining !== 1 ? 's' : ''} remaining.{' '}
+            <Button variant="link" className="text-destructive font-medium p-0 ml-1 h-auto underline" onClick={handleTopUp}>
+              Please top up to continue using your AI Receptionist
             </Button>
           </AlertDescription>
         </Alert>

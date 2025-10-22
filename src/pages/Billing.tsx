@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useTenant } from "@/hooks/useTenant";
 import { toast } from "sonner";
 import { PaymentModal } from "@/components/billing/PaymentModal";
+import { supabase } from "@/integrations/supabase/client";
 import {
   CreditCard,
   DollarSign,
@@ -27,8 +28,10 @@ export default function Billing() {
   const [isAddingCredits, setIsAddingCredits] = useState(false);
   const [topupCalls, setTopupCalls] = useState([50]); // Slider value for number of calls
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [creditData, setCreditData] = useState<any>(null);
+  const [loadingCredits, setLoadingCredits] = useState(true);
 
-  // Get region-specific currency
+  // Get region-specific currency from URL path
   const getCurrency = () => {
     const currencyMap: Record<string, { code: string; symbol: string }> = {
       'au': { code: 'AUD', symbol: '$' },
@@ -36,23 +39,77 @@ export default function Billing() {
       'gb': { code: 'GBP', symbol: '£' },
       'us': { code: 'USD', symbol: '$' },
       'ca': { code: 'CAD', symbol: '$' },
+      'in': { code: 'INR', symbol: '₹' },
     };
     return currencyMap[region?.toLowerCase() || 'us'] || { code: 'USD', symbol: '$' };
   };
 
   const currency = getCurrency();
 
-  // Mock data - will be replaced with real data later
-  const currentBalance = client?.credits || 0;
-  const callCost = 2; // $2 per call
-  const estimatedCallsRemaining = Math.floor(currentBalance / callCost);
+  const [pricingConfig, setPricingConfig] = useState<any>(null);
 
-  // Subscription data (mock for now)
-  const subscriptionActive = true;
-  const subscriptionPrice = 49;
-  const includedCalls = 20;
-  const callsUsedThisMonth = 12; // Mock value
-  const nextBillingDate = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
+  // Fetch real credit data and pricing from database
+  useEffect(() => {
+    async function fetchCredits() {
+      if (!client?.user_id) return;
+
+      setLoadingCredits(true);
+
+      // Fetch credits
+      const { data, error } = await supabase
+        .from('credits')
+        .select('*')
+        .eq('user_id', client.user_id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching credits:', error);
+      } else if (data) {
+        setCreditData(data);
+      }
+
+      // Fetch pricing config for current currency
+      const { data: pricing, error: pricingError } = await supabase
+        .from('pricing_config')
+        .select('*')
+        .eq('currency', currency.code)
+        .single();
+
+      if (pricingError) {
+        console.error('Error fetching pricing:', pricingError);
+      } else if (pricing) {
+        setPricingConfig(pricing);
+      }
+
+      setLoadingCredits(false);
+    }
+
+    fetchCredits();
+  }, [client?.user_id, currency.code]);
+
+  // Handle payment redirect success/failure
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentStatus = urlParams.get('payment');
+
+    if (paymentStatus === 'success') {
+      toast.success('Payment successful! Your credits have been added.');
+    } else if (paymentStatus === 'failed') {
+      toast.error('Payment failed. Please try again.');
+    }
+  }, []);
+
+  // Real data from database
+  const currentBalance = creditData?.balance || 0;
+  const callCost = pricingConfig?.per_call_price || 2; // Get from pricing_config
+  const estimatedCallsRemaining = currentBalance;
+
+  // Subscription data (from database and pricing_config)
+  const subscriptionActive = (creditData?.calls_included || 0) > 0;
+  const subscriptionPrice = pricingConfig?.base_price || creditData?.monthly_base_fee || 49;
+  const includedCalls = pricingConfig?.base_calls || creditData?.calls_included || 20;
+  const callsUsedThisMonth = 0; // TODO: Calculate from call_sessions table
+  const nextBillingDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric'

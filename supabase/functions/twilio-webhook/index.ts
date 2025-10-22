@@ -148,11 +148,9 @@ async function handleStatusWebhook(req: Request, supabase: any) {
     updateData.duration_seconds = durationSeconds;
     updateData.end_time = new Date().toISOString();
 
-    // Calculate cost: $2.00 per call (flat rate as per business model)
-    // OR based on duration if preferred
-    const costPerMinute = 0.05;
-    const minutes = Math.ceil(durationSeconds / 60);
-    updateData.cost_amount = minutes * costPerMinute;
+    // Calculate cost: $2.00 flat per completed call (regardless of duration)
+    // This matches our marketing and business model
+    updateData.cost_amount = 2.00;
 
     console.log(`[Status] Call completed - Duration: ${durationSeconds}s, Cost: $${updateData.cost_amount}`);
   }
