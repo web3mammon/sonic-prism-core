@@ -102,7 +102,7 @@ export default function Billing() {
   // Real data from database
   const currentBalance = creditData?.balance || 0;
   const callCost = pricingConfig?.per_call_price || 2; // Get from pricing_config
-  const estimatedCallsRemaining = currentBalance;
+  const estimatedCallsRemaining = Math.floor(currentBalance / callCost);
 
   // Subscription data (from database and pricing_config)
   const subscriptionActive = (creditData?.calls_included || 0) > 0;

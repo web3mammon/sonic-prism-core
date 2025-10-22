@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -13,13 +14,14 @@ import { useClientDashboardStats } from "@/hooks/useClientDashboardStats";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
 import { useTenant } from "@/hooks/useTenant";
 import { useNavigate } from "react-router-dom";
-import { 
-  Phone, 
-  TrendingUp, 
-  Calendar, 
-  CreditCard, 
-  Play, 
-  Users, 
+import { supabase } from "@/integrations/supabase/client";
+import {
+  Phone,
+  TrendingUp,
+  Calendar,
+  CreditCard,
+  Play,
+  Users,
   Clock,
   DollarSign,
   Settings,
@@ -35,6 +37,7 @@ export default function Dashboard() {
   const { region } = useTenant();
   const navigate = useNavigate();
 
+  const [pricingConfig, setPricingConfig] = useState<any>(null);
 
   const isClient = profile?.role === 'client';
   const isAdmin = profile?.role === 'admin';
@@ -45,10 +48,11 @@ export default function Dashboard() {
   const getCurrencyByRegion = (region: string) => {
     const currencyMap: Record<string, { code: string; symbol: string }> = {
       'au': { code: 'AUD', symbol: '$' },
-      'uk': { code: 'GBP', symbol: '£' }, 
+      'uk': { code: 'GBP', symbol: '£' },
       'gb': { code: 'GBP', symbol: '£' },
       'us': { code: 'USD', symbol: '$' },
       'ca': { code: 'CAD', symbol: '$' },
+      'in': { code: 'INR', symbol: '₹' },
       'nz': { code: 'NZD', symbol: '$' }
     };
     return currencyMap[region.toLowerCase()] || { code: 'USD', symbol: '$' };
@@ -56,14 +60,35 @@ export default function Dashboard() {
 
   const currencyInfo = getCurrencyByRegion(region);
 
-  // Use dynamic data from database or fallback to defaults
+  // Fetch pricing config from database based on region currency
+  useEffect(() => {
+    async function fetchPricing() {
+      const { data, error } = await supabase
+        .from('pricing_config')
+        .select('*')
+        .eq('currency', currencyInfo.code)
+        .single();
+
+      if (error) {
+        console.error('Error fetching pricing:', error);
+      } else if (data) {
+        setPricingConfig(data);
+      }
+    }
+
+    if (currencyInfo.code) {
+      fetchPricing();
+    }
+  }, [currencyInfo.code]);
+
+  // Use dynamic data from database with real pricing
   const creditData = {
     balance: stats?.currentBalance || 0,
     currency: currencyInfo.code,
     currencySymbol: currencyInfo.symbol,
     callsRemaining: stats?.callsRemaining || 0,
     callsThisMonth: stats?.callsThisMonth || 0,
-    averageCallCost: 2.00, // Always $2 per call (USP)
+    averageCallCost: pricingConfig?.per_call_price || 2.00, // Fetch from pricing_config
     lowBalanceThreshold: 5 // Warn when 5 or fewer calls remaining
   };
 
@@ -214,9 +239,9 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-5xl font-extralight text-green-700 dark:text-green-300">
-              {Math.floor(creditData.balance / 2.00).toLocaleString()}
+              {Math.floor(creditData.balance / creditData.averageCallCost).toLocaleString()}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">at $2.00 per call</p>
+            <p className="text-xs text-muted-foreground mt-2">at {creditData.currencySymbol}{creditData.averageCallCost.toFixed(2)} per call</p>
           </CardContent>
         </Card>
 
