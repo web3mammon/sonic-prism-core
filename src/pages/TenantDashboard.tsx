@@ -302,7 +302,12 @@ export default function Dashboard() {
               </div>
               <div className="text-lg text-muted-foreground mb-1">{creditData.currency}</div>
               <div className="text-sm text-muted-foreground">
-                Approximately <span className="font-semibold text-primary">{Math.floor(creditData.balance / creditData.averageCallCost)} calls</span> remaining at {creditData.currencySymbol}{creditData.averageCallCost}/call
+                Approximately <span className="font-semibold text-primary">{Math.floor(creditData.balance / creditData.averageCallCost)} calls</span> remaining at {creditData.currencySymbol}{creditData.averageCallCost.toFixed(2)}/call
+                {pricingConfig && (
+                  <>
+                    {' '}+ <span className="font-semibold text-primary">{pricingConfig.base_calls} calls</span> at {creditData.currencySymbol}{pricingConfig.base_price.toFixed(2)}/mo
+                  </>
+                )}
               </div>
             </div>
 
