@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { MetricsCard } from "@/components/dashboard/MetricsCard";
+import { ModernButton } from "@/components/ui/modern-button";
+import { AnimatedNumber } from "@/components/ui/animated-number";
+import { StatusDot } from "@/components/ui/status-dot";
 import { LiveDemoSection } from "@/components/LiveDemoSection";
 import { BusinessInfoSection } from "@/components/BusinessInfoSection";
 import { LiveCallMonitor } from "@/components/voice-ai/LiveCallMonitor";
@@ -12,37 +13,48 @@ import { useAuth } from "@/hooks/useAuth";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useClientDashboardStats } from "@/hooks/useClientDashboardStats";
 import { useRecentActivity } from "@/hooks/useRecentActivity";
+import { useEnhancedDashboardData } from "@/hooks/useEnhancedDashboardData";
 import { useTenant } from "@/hooks/useTenant";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { motion } from "framer-motion";
 import {
   Phone,
   TrendingUp,
+  TrendingDown,
   Calendar,
   CreditCard,
   Play,
   Users,
   Clock,
   DollarSign,
-  Settings,
   Activity,
-  AlertTriangle
+  AlertTriangle,
+  Zap,
+  ArrowUpRight,
+  Smile,
+  Meh,
+  Frown,
+  Target,
+  BarChart3,
+  User,
 } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useTheme } from "next-themes";
 
 export default function Dashboard() {
   const { profile } = useAuth();
+  const { theme } = useTheme();
   const { client, loading: clientLoading, error: clientError } = useCurrentClient();
   const { stats, loading: statsLoading, error: statsError } = useClientDashboardStats(client?.client_id || null);
   const { activities, loading: activitiesLoading } = useRecentActivity(client?.client_id || null);
   const { region } = useTenant();
+  const { data: enhancedData, loading: enhancedLoading } = useEnhancedDashboardData(client?.client_id || null, region);
   const navigate = useNavigate();
 
   const [pricingConfig, setPricingConfig] = useState<any>(null);
 
   const isClient = profile?.role === 'client';
-  const isAdmin = profile?.role === 'admin';
-  const isTeamMember = profile?.role === 'team_member';
-  const isInternal = isAdmin || isTeamMember;
 
   // Get region-specific currency
   const getCurrencyByRegion = (region: string) => {
@@ -60,7 +72,7 @@ export default function Dashboard() {
 
   const currencyInfo = getCurrencyByRegion(region);
 
-  // Fetch pricing config from database based on region currency
+  // Fetch pricing config
   useEffect(() => {
     async function fetchPricing() {
       const { data, error } = await supabase
@@ -81,47 +93,33 @@ export default function Dashboard() {
     }
   }, [currencyInfo.code]);
 
-  // Use dynamic data from database with real pricing
   const creditData = {
-    balance: stats?.currentBalance || 0,
+    balance: enhancedData?.creditBalance || stats?.currentBalance || 0,
     currency: currencyInfo.code,
     currencySymbol: currencyInfo.symbol,
-    callsRemaining: stats?.callsRemaining || 0,
-    callsThisMonth: stats?.callsThisMonth || 0,
-    averageCallCost: pricingConfig?.per_call_price || 2.00, // Fetch from pricing_config
-    lowBalanceThreshold: 5 // Warn when 5 or fewer calls remaining
+    callsRemaining: enhancedData?.callsRemaining || 0,
+    callsThisMonth: enhancedData?.callsThisMonth || stats?.callsThisMonth || 0,
+    averageCallCost: pricingConfig?.per_call_price || 2.00,
+    lowBalanceThreshold: 5
   };
 
   const isLowBalance = creditData.callsRemaining <= creditData.lowBalanceThreshold;
-  const balancePercentage = Math.min((creditData.balance / 100) * 100, 100);
   const callsUsedPercentage = creditData.callsThisMonth > 0
     ? ((creditData.callsThisMonth / (creditData.callsThisMonth + creditData.callsRemaining)) * 100)
     : 0;
 
   // Navigation handlers
-  const handleTestCall = () => {
-    navigate('./testing');
-  };
+  const handleTestCall = () => navigate('./testing');
+  const handleCustomerData = () => navigate('./call-data');
+  const handleTopUp = () => navigate('./billing');
+  const handleViewUsage = () => navigate('./call-data');
 
-  const handleCustomerData = () => {
-    navigate('./call-data');
-  };
-
-  const handleTopUp = () => {
-    navigate('./billing');
-  };
-
-  const handleViewUsage = () => {
-    navigate('./call-data');  // Same as call history for now
-  };
-
-  const handleViewAllClients = () => {
-    navigate('/');  // Navigate to Central HQ
-  };
-
-  const handleScheduleMaintenance = () => {
-    // TODO: Implement maintenance scheduling
-    alert('Maintenance scheduling coming soon');
+  // Get sentiment emoji
+  const getSentimentDisplay = (score: number | null) => {
+    if (score === null) return { icon: Meh, color: 'text-gray-400', label: 'N/A' };
+    if (score >= 0.7) return { icon: Smile, color: 'text-green-500', label: 'Positive' };
+    if (score >= 0.4) return { icon: Meh, color: 'text-yellow-500', label: 'Neutral' };
+    return { icon: Frown, color: 'text-red-500', label: 'Negative' };
   };
 
   // Show loading state
@@ -162,280 +160,439 @@ export default function Dashboard() {
     );
   }
 
+  const sentiment = getSentimentDisplay(enhancedData?.avgSentiment || null);
+
   return (
-    <div className="space-y-6 font-manrope relative">
-      {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
-        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
-        backgroundSize: '24px 24px'
-      }}></div>
+    <div className="space-y-8 font-manrope relative">
+      {/* Subtle dotted background */}
+      <div
+        className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white"
+        style={{
+          backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+          backgroundSize: '24px 24px'
+        }}
+      />
 
       {/* Low Balance Warning */}
       {isLowBalance && (
-        <Alert className="border-destructive bg-destructive/10">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription className="font-medium">
-            <span className="text-destructive">Call limits approaching.</span> You have {creditData.callsRemaining} call{creditData.callsRemaining !== 1 ? 's' : ''} remaining.{' '}
-            <Button variant="link" className="text-destructive font-medium p-0 ml-1 h-auto underline" onClick={handleTopUp}>
-              Please top up to continue using your AI Receptionist
-            </Button>
-          </AlertDescription>
-        </Alert>
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Alert className="border-primary/30 bg-primary/5">
+            <AlertTriangle className="h-4 w-4 text-primary" />
+            <AlertDescription className="font-medium">
+              <span className="text-primary">Call limits approaching.</span> You have {creditData.callsRemaining} call{creditData.callsRemaining !== 1 ? 's' : ''} remaining.{' '}
+              <Button variant="link" className="text-primary font-medium p-0 ml-1 h-auto underline" onClick={handleTopUp}>
+                Please top up to continue
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </motion.div>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-5xl font-extralight mb-6">
-            {client.business_name} Dashboard
-          </h1>
+      {/* Hero Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="space-y-1"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-5xl font-extralight mb-2">
+              {client.business_name}
+            </h1>
+            <div className="flex items-center gap-2">
+              <StatusDot status="active" label="Active" size="sm" />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" size="lg" onClick={handleTestCall} className="group">
+              <Play className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
+              Test Call
+            </Button>
+            <ModernButton variant="gradient" size="lg" onClick={handleCustomerData}>
+              <Users className="mr-2 h-4 w-4" />
+              {isClient ? "Call History" : "Customer Data"}
+            </ModernButton>
+          </div>
         </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={handleTestCall}>
-            <Play className="mr-2 h-4 w-4" />
-            Test Call
-          </Button>
-          <Button size="sm" onClick={handleCustomerData}>
-            <Users className="mr-2 h-4 w-4" />
-            {isClient ? "Call History" : "Customer Data"}
-          </Button>
-        </div>
-      </div>
+      </motion.div>
 
-      {/* Live Demo Section - Only for clients */}
+      {/* Live Demo Section */}
       {isClient && <LiveDemoSection />}
 
-      {/* Main Dashboard Grid: 2x2 Cards + Credit Balance */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left: 2x2 Metrics Cards */}
-        <div className="lg:col-span-2 grid gap-4 grid-cols-2 animate-fade-in">
-        {/* Calls This Month - Blue */}
-        <Card className="font-manrope border-l-4 border-l-blue-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-blue-50/75 dark:bg-blue-950/30 flex flex-col justify-between min-h-[160px]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Calls This Month
-            </CardTitle>
-            <div className="p-2 rounded-full bg-blue-100 dark:bg-blue-900/30">
-              <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-5xl font-extralight text-blue-700 dark:text-blue-300">
-              {creditData.callsThisMonth.toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">total calls</p>
-          </CardContent>
-        </Card>
+      {/* Hero Stats Row - REAL DATA ONLY */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* AI Persona Card - Smaller */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.05 }}
+          className="rounded-2xl border border-white/8 bg-white/[0.02] p-6 overflow-hidden relative flex items-center gap-4"
+        >
+          {/* AI Avatar - Smaller rectangular */}
+          <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br from-primary/10 to-primary/5">
+            <img
+              src="/assets/images/uifaces-human-avatar.jpg"
+              alt="Sofia - AI Receptionist"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <div className="space-y-1 flex-1">
+            <h3 className="font-medium text-base">Sofia</h3>
+            <p className="text-xs text-muted-foreground">Your AI Receptionist</p>
+            <Badge className="text-xs bg-primary/10 text-primary border-primary/20">
+              Online 24/7
+            </Badge>
+          </div>
+        </motion.div>
 
-        {/* Calls Remaining - Green */}
-        <Card className="font-manrope border-l-4 border-l-green-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-green-50/75 dark:bg-green-950/30 flex flex-col justify-between min-h-[160px]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Calls Remaining
-            </CardTitle>
-            <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
-              <Clock className="h-4 w-4 text-green-600 dark:text-green-400" />
+        {/* Calls This Month - REAL */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="rounded-2xl border border-white/8 bg-white/[0.02] p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 rounded-lg bg-blue-500/10">
+              <Phone className="h-5 w-5 text-blue-500" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-5xl font-extralight text-green-700 dark:text-green-300">
-              {Math.floor(creditData.balance / creditData.averageCallCost).toLocaleString()}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">at {creditData.currencySymbol}{creditData.averageCallCost.toFixed(2)} per call</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div>
+            <AnimatedNumber
+              value={enhancedData?.callsThisMonth || 0}
+              className="text-4xl font-extralight"
+            />
+            <p className="text-sm text-muted-foreground mt-1">Calls This Month</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">total calls</p>
+          </div>
+        </motion.div>
 
-        {/* Avg Call Duration - Purple */}
-        <Card className="font-manrope border-l-4 border-l-purple-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-purple-50/75 dark:bg-purple-950/30 flex flex-col justify-between min-h-[160px]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Avg Call Duration
-            </CardTitle>
-            <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30">
-              <TrendingUp className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+        {/* Calls Remaining - REAL */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+          className="rounded-2xl border border-white/8 bg-white/[0.02] p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 rounded-lg bg-green-500/10">
+              <Target className="h-5 w-5 text-green-500" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-5xl font-extralight text-purple-700 dark:text-purple-300">
-              {stats?.avgDurationSeconds ? `${(stats.avgDurationSeconds / 60).toFixed(1)} min` : '0 min'}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">average duration</p>
-          </CardContent>
-        </Card>
+          </div>
+          <div>
+            {enhancedData && enhancedData.callsRemaining !== null ? (
+              <AnimatedNumber
+                value={enhancedData.callsRemaining}
+                className="text-4xl font-extralight text-green-500"
+              />
+            ) : (
+              <span className="text-4xl font-extralight text-muted-foreground">--</span>
+            )}
+            <p className="text-sm text-muted-foreground mt-1">Calls Remaining</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">in current plan</p>
+          </div>
+        </motion.div>
 
-        {/* Next Billing Date - Amber */}
-        <Card className="font-manrope border-l-4 border-l-amber-500 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 bg-amber-50/75 dark:bg-amber-950/30 flex flex-col justify-between min-h-[160px]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Next Billing Date
-            </CardTitle>
-            <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
-              <Calendar className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        {/* Average Call Duration - REAL */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="rounded-2xl border border-white/8 bg-white/[0.02] p-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-2 rounded-lg bg-purple-500/10">
+              <Clock className="h-5 w-5 text-purple-500" />
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-5xl font-extralight text-amber-700 dark:text-amber-300">
-              {new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">upcoming charge</p>
-          </CardContent>
-        </Card>
-        </div>
-
-        {/* Right: Credit Balance Section */}
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle className="text-2xl font-extralight flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-primary" />
-              Credit Balance
-              {isLowBalance && <Badge variant="destructive" className="text-xs animate-pulse">Low Balance</Badge>}
-            </CardTitle>
-            <CardDescription>
-              Your current credit balance and call usage
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Credit Balance Display */}
-            <div className="text-center p-8 rounded-lg bg-background/50">
-              <div className="text-5xl font-extralight text-primary mb-3">
-                {creditData.currencySymbol}{creditData.balance.toFixed(2)}
+          </div>
+          <div>
+            {enhancedData && enhancedData.avgCallDuration !== null ? (
+              <div className="text-4xl font-extralight">
+                <AnimatedNumber
+                  value={enhancedData.avgCallDuration}
+                  decimals={1}
+                  suffix=" min"
+                  className="text-4xl font-extralight"
+                />
               </div>
-              <div className="text-lg text-muted-foreground mb-1">{creditData.currency}</div>
-              <div className="text-sm text-muted-foreground">
-                Approximately <span className="font-semibold text-primary">{Math.floor(creditData.balance / creditData.averageCallCost)} calls</span> remaining at {creditData.currencySymbol}{creditData.averageCallCost.toFixed(2)}/call
-                {pricingConfig && (
-                  <>
-                    {' '}+ <span className="font-semibold text-primary">{pricingConfig.base_calls} calls</span> at {creditData.currencySymbol}{pricingConfig.base_price.toFixed(2)}/mo
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Usage Overview */}
-            <div className="space-y-4">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm font-medium">
-                  <span className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                    Monthly Usage
-                  </span>
-                  <span className="text-primary">{creditData.callsThisMonth} calls ({creditData.currencySymbol}{(creditData.callsThisMonth * creditData.averageCallCost).toFixed(2)})</span>
-                </div>
-                <div className="relative">
-                  <Progress value={callsUsedPercentage} className="h-3" />
-                  <div
-                    className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-500"
-                    style={{ width: `${callsUsedPercentage}%` }}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {callsUsedPercentage.toFixed(1)}% of projected monthly usage
-                </p>
-              </div>
-
-              {isClient && (
-                <div className="flex items-center justify-end space-x-2 pt-2">
-                  <Button variant="outline" size="sm" onClick={handleViewUsage}>
-                    View Usage History
-                  </Button>
-                  <Button
-                    size="sm"
-                    className={isLowBalance ? "bg-destructive hover:bg-destructive/90" : ""}
-                    onClick={handleTopUp}
-                  >
-                    Top Up Credits
-                  </Button>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            ) : (
+              <span className="text-4xl font-extralight text-muted-foreground">--</span>
+            )}
+            <p className="text-sm text-muted-foreground mt-1">Avg Call Duration</p>
+            <p className="text-xs text-muted-foreground/60 mt-1">average duration</p>
+          </div>
+        </motion.div>
       </div>
 
-      {/* Business Information Section - Only for clients */}
+      {/* Charts & Insights Row - REAL DATA */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Peak Hours Chart - REAL */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
+          className="lg:col-span-2 rounded-2xl border border-white/8 bg-white/[0.02] p-6"
+        >
+          <div className="flex items-center gap-2 mb-6">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-medium">Call Volume by Hour</h3>
+          </div>
+          {enhancedData && enhancedData.callsByHour.length > 0 ? (
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={enhancedData.callsByHour}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={theme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}
+                />
+                <XAxis
+                  dataKey="hour"
+                  stroke={theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'}
+                  tickFormatter={(hour) => `${hour}:00`}
+                />
+                <YAxis stroke={theme === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: theme === 'dark' ? 'rgba(0,0,0,0.9)' : 'rgba(255,255,255,0.9)',
+                    border: theme === 'dark' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(0,0,0,0.1)',
+                    borderRadius: '8px',
+                    color: theme === 'dark' ? '#fff' : '#000'
+                  }}
+                  labelFormatter={(hour) => `${hour}:00`}
+                />
+                <Bar dataKey="calls" radius={[8, 8, 0, 0]}>
+                  {enhancedData?.callsByHour.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.hour === enhancedData?.peakHour ? '#ef4444' : 'rgba(239, 68, 68, 0.3)'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+              <p className="text-sm">No call data yet</p>
+            </div>
+          )}
+          {enhancedData && enhancedData.peakHour !== null && (
+            <p className="text-xs text-muted-foreground mt-4">
+              Peak hour: <span className="text-primary font-medium">{enhancedData.peakHour}:00</span>
+            </p>
+          )}
+        </motion.div>
+
+        {/* Quick Insights - REAL */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="space-y-3"
+        >
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Top Intent</p>
+                <p className="text-lg font-medium mt-1">
+                  {enhancedData?.topIntent || 'N/A'}
+                </p>
+              </div>
+              <Target className="h-8 w-8 text-primary/30" />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">Transfers</p>
+                <p className="text-lg font-medium mt-1">
+                  {enhancedData?.transferCount || 0}
+                </p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  {(enhancedData?.transferRate || 0).toFixed(1)}% rate
+                </p>
+              </div>
+              <Phone className="h-8 w-8 text-primary/30" />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-muted-foreground">This Month</p>
+                <p className="text-lg font-medium mt-1">
+                  <AnimatedNumber value={creditData.callsThisMonth} />
+                </p>
+                <p className="text-xs text-muted-foreground/60 mt-1">total calls</p>
+              </div>
+              <Activity className="h-8 w-8 text-primary/30" />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Credit Balance & Usage */}
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.35 }}
+        className="rounded-2xl border border-white/8 bg-white/[0.02] p-6"
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <CreditCard className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-medium">Credit Balance</h3>
+            </div>
+            <AnimatedNumber
+              value={creditData.balance}
+              decimals={2}
+              prefix={creditData.currencySymbol}
+              className="text-4xl font-extralight"
+            />
+            <p className="text-sm text-muted-foreground mt-2">
+              ≈ {creditData.callsRemaining} calls remaining
+            </p>
+          </div>
+
+          <div className="md:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-medium">Monthly Usage</h3>
+              <StatusDot status="active" label="Tracking" size="sm" />
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Calls used this month</span>
+                <span className="font-semibold">{creditData.callsThisMonth} calls</span>
+              </div>
+              <div className="relative h-3">
+                <div className="absolute inset-0 rounded-full bg-white/5" />
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${callsUsedPercentage}%` }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  className="absolute top-0 left-0 h-3 rounded-full bg-gradient-to-r from-primary to-primary/80"
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{callsUsedPercentage.toFixed(1)}% of capacity</span>
+                <span>Est. {creditData.currencySymbol}{(creditData.callsThisMonth * creditData.averageCallCost).toFixed(2)}</span>
+              </div>
+            </div>
+            {isClient && (
+              <div className="flex gap-3 pt-4">
+                <Button variant="outline" size="sm" onClick={handleViewUsage} className="flex-1">
+                  View Usage History
+                </Button>
+                <ModernButton variant="gradient" size="sm" onClick={handleTopUp} className="flex-1">
+                  Top Up Credits
+                </ModernButton>
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+
+      {/* Business Info */}
       {isClient && <BusinessInfoSection />}
 
-      <hr className="border-border" />
-
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {/* Live Call Monitor - Shows active calls with sentiment analysis */}
-        <div className="space-y-6 lg:col-span-2">
-          <div className="space-y-2 pt-8">
+      {/* Live Call Monitoring & Recent Activity */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          className="lg:col-span-2 space-y-6"
+        >
+          <div className="space-y-2">
             <h2 className="text-2xl font-extralight flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />
               Live Call Monitoring
             </h2>
-            <p className="text-muted-foreground">
-              Real-time call tracking with AI sentiment analysis
-            </p>
+            <p className="text-sm text-muted-foreground">Real-time call tracking with AI sentiment analysis</p>
           </div>
           <LiveCallMonitor clientId={client?.client_id} />
-        </div>
+        </motion.div>
 
-        {/* Recent Activity - Real Data from Database */}
-        <div className="space-y-6">
-          <div className="space-y-2 pt-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.6 }}
+          className="space-y-6"
+        >
+          <div className="space-y-2">
             <h2 className="text-2xl font-extralight flex items-center gap-2">
               <Clock className="h-5 w-5 text-primary" />
               Recent Activity
             </h2>
-            <p className="text-muted-foreground">
-              {isClient ? "Your recent calls and account activity" : "Latest calls and system events"}
-            </p>
+            <p className="text-sm text-muted-foreground">Latest calls</p>
           </div>
+
           {activitiesLoading ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
             </div>
           ) : activities.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>No recent activity yet</p>
-              <p className="text-xs mt-2">Activity will appear here once calls are made</p>
+            <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-8 text-center">
+              <div className="space-y-2">
+                <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Activity className="h-6 w-6 text-primary" />
+                </div>
+                <p className="text-muted-foreground">No recent activity</p>
+                <p className="text-xs text-muted-foreground/60">Activity will appear here once calls are made</p>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
               {activities.map((activity, index) => (
-                <div key={index} className="p-4 rounded-lg bg-muted/50 hover:bg-muted/70 transition-colors">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 ${
-                        activity.status === "success" ? "bg-green-500" :
-                        activity.status === "info" ? "bg-blue-500" :
-                        activity.status === "warning" ? "bg-yellow-500" :
-                        activity.status === "error" ? "bg-red-500" : "bg-gray-400"
-                      }`} />
-                      <div className="space-y-1 flex-1">
-                        <div className="flex items-center justify-between">
-                          <p className="font-medium text-sm">{activity.details?.caller || 'Unknown'}</p>
-                          <Badge variant={activity.status === "success" ? "secondary" : "destructive"} className={
-                            activity.status === "success"
-                              ? "bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400"
-                              : ""
-                          }>
-                            {activity.status === "success" ? "Completed" : "Failed"}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                  className="rounded-2xl border border-white/8 bg-white/[0.02] p-4 hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-[400ms] ease-[cubic-bezier(0.4,0,0.2,1)] cursor-pointer"
+                >
+                  <div className="flex items-start gap-3">
+                    <StatusDot
+                      status={activity.status === "success" ? "success" : "error"}
+                      size="sm"
+                    />
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="font-medium text-sm">{activity.details?.caller || 'Unknown'}</p>
+                        <Badge
+                          variant={activity.status === "success" ? "secondary" : "destructive"}
+                          className="text-xs bg-white/5 border-white/10"
+                        >
+                          {activity.status === "success" ? "Completed" : "Failed"}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {activity.details?.duration
+                            ? `${Math.floor(activity.details.duration / 60)}m ${activity.details.duration % 60}s`
+                            : 'N/A'}
+                        </span>
+                        {activity.details?.cost > 0 && (
                           <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" />
-                            {activity.details?.duration ? `${Math.floor(activity.details.duration / 60)}m ${activity.details.duration % 60}s` : 'N/A'}
+                            <DollarSign className="h-3 w-3" />
+                            ${activity.details.cost.toFixed(2)}
                           </span>
-                          {activity.details?.cost > 0 && (
-                            <span className="flex items-center gap-1">
-                              <DollarSign className="h-3 w-3" />
-                              ${activity.details.cost.toFixed(2)}
-                            </span>
-                          )}
-                          <span className="ml-auto">{activity.time}</span>
-                        </div>
+                        )}
+                        <span className="ml-auto">{activity.time}</span>
                       </div>
                     </div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           )}
-        </div>
+        </motion.div>
       </div>
     </div>
   );

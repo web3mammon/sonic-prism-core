@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ModernButton } from "@/components/ui/modern-button";
 import { Badge } from "@/components/ui/badge";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Loader2
 } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface Integration {
   id: string;
@@ -98,21 +99,37 @@ export default function Integrations() {
   return (
     <div className="space-y-6 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+      <div className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white" style={{
         backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }}></div>
 
-      <div className="space-y-2">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-2"
+      >
         <h1 className="text-5xl font-extralight mb-2">Integrations</h1>
         <p className="text-muted-foreground">
           Connect your business tools to automate voice AI workflows
         </p>
-      </div>
+      </motion.div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {integrations.map((integration) => (
-          <Card key={integration.id} className="relative overflow-hidden bg-muted/50">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+      >
+        {integrations.map((integration, index) => (
+          <motion.div
+            key={integration.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.15 + index * 0.05 }}
+            className="relative overflow-hidden rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+          >
             {integration.comingSoon && (
               <div className="absolute top-4 right-4">
                 <Badge variant="secondary" className="bg-muted">
@@ -121,21 +138,21 @@ export default function Integrations() {
               </div>
             )}
 
-            <CardHeader>
+            <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-primary/10 text-2xl">
                   {integration.icon}
                 </div>
                 <div className="flex-1">
-                  <CardTitle className="text-xl font-extralight">{integration.name}</CardTitle>
+                  <h3 className="text-xl font-extralight">{integration.name}</h3>
                 </div>
               </div>
-              <CardDescription className="mt-2">
+              <p className="text-sm text-muted-foreground">
                 {integration.description}
-              </CardDescription>
-            </CardHeader>
+              </p>
+            </div>
 
-            <CardContent>
+            <div>
               {integration.status === 'connected' ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-green-600">
@@ -161,13 +178,13 @@ export default function Integrations() {
                   </div>
                 </div>
               ) : integration.status === 'available' ? (
-                <Button
+                <ModernButton
                   className="w-full"
                   onClick={() => handleConnect(integration.id)}
                 >
                   <Plug className="h-4 w-4 mr-2" />
                   Connect {integration.name}
-                </Button>
+                </ModernButton>
               ) : (
                 <Button
                   variant="secondary"
@@ -177,29 +194,42 @@ export default function Integrations() {
                   Coming Soon
                 </Button>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
-      <hr className="border-border" />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+      >
+        <hr className="border-black/[0.05] dark:border-white/5" />
+      </motion.div>
 
       {/* Need Help Section */}
-      <div className="space-y-4">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.3 }}
+        className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-4"
+      >
         <div className="space-y-2">
-          <h2 className="text-2xl font-extralight flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-primary" />
-            Need Help?
-          </h2>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <AlertCircle className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="text-2xl font-extralight">Need Help?</h2>
+          </div>
           <p className="text-muted-foreground">
             Having trouble connecting an integration? Check out our setup guides or contact support.
           </p>
         </div>
-        <Button variant="outline" size="sm">
+        <ModernButton variant="outline" size="sm">
           <ExternalLink className="h-4 w-4 mr-2" />
           View Documentation
-        </Button>
-      </div>
+        </ModernButton>
+      </motion.div>
     </div>
   );
 }

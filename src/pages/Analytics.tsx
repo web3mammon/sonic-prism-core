@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { MetricsCard } from "@/components/dashboard/MetricsCard";
+import { ModernButton } from "@/components/ui/modern-button";
 import {
   TrendingUp,
   Phone,
@@ -8,7 +8,10 @@ import {
   Target,
   Calendar,
   Loader2,
-  Download
+  Download,
+  BarChart3,
+  Activity,
+  ArrowRight
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { motion } from "framer-motion";
 
 export default function Analytics() {
   const [dateRange, setDateRange] = useState("7days");
@@ -65,14 +69,19 @@ export default function Analytics() {
   }
 
   return (
-    <div className="space-y-6 p-6 font-manrope relative">
+    <div className="space-y-8 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+      <div className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white" style={{
         backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }}></div>
 
-      <div className="flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between"
+      >
         <div className="space-y-2">
           <h1 className="text-5xl font-extralight mb-2">Analytics Dashboard</h1>
           <p className="text-muted-foreground">
@@ -92,12 +101,12 @@ export default function Analytics() {
               <SelectItem value="90days">Last 90 days</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={() => exportAnalytics()}>
+          <ModernButton variant="outline" onClick={() => exportAnalytics()}>
             <Download className="mr-2 h-4 w-4" />
             Export Report
-          </Button>
+          </ModernButton>
         </div>
-      </div>
+      </motion.div>
 
       {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -127,13 +136,29 @@ export default function Analytics() {
         />
       </div>
 
-      <hr className="border-border" />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+      >
+        <hr className="border-black/[0.05] dark:border-white/5" />
+      </motion.div>
 
       {/* Call Volume Trend - Full Width */}
-      <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.3 }}
+        className="space-y-6"
+      >
         <div className="space-y-2">
-          <h2 className="text-2xl font-extralight">Call Volume Trend</h2>
-          <p className="text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <BarChart3 className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="text-2xl font-extralight">Call Volume Trend</h2>
+          </div>
+          <p className="text-muted-foreground text-sm">
             Daily call volume over the selected period
           </p>
         </div>
@@ -167,39 +192,47 @@ export default function Analytics() {
             })}
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Call Intent Distribution - only show if we have intent data */}
       {analytics.intentDistribution && analytics.intentDistribution.length > 0 && (
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle className="font-extralight">Call Intent Distribution</CardTitle>
-            <CardDescription>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+          className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Activity className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Call Intent Distribution</h2>
+            </div>
+            <p className="text-muted-foreground text-sm">
               Breakdown of call types and their frequency
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {analytics.intentDistribution.map((item, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{item.intent}</span>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-muted-foreground">{item.count}</span>
-                      <span className="font-medium">{item.percentage}%</span>
-                    </div>
-                  </div>
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all"
-                      style={{ width: `${item.percentage}%` }}
-                    />
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {analytics.intentDistribution.map((item, index) => (
+              <div key={index} className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{item.intent}</span>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-muted-foreground">{item.count}</span>
+                    <span className="font-medium text-primary">{item.percentage}%</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                <div className="w-full bg-black/[0.05] dark:bg-white/[0.05] rounded-full h-2 overflow-hidden">
+                  <div
+                    className="bg-primary h-2 rounded-full transition-all"
+                    style={{ width: `${item.percentage}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       )}
     </div>
   );

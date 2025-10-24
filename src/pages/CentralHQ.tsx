@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ModernButton } from "@/components/ui/modern-button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/useAuth";
+import { motion } from "framer-motion";
 import { 
   Users, 
   Activity, 
@@ -263,88 +262,119 @@ const CentralHQ = () => {
   };
 
   return (
-    <div className="space-y-8 font-manrope relative">
+    <div className="space-y-8 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
-        backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
-        backgroundSize: '24px 24px'
-      }}></div>
+      <div
+        className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white"
+        style={{
+          backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+          backgroundSize: '24px 24px'
+        }}
+      />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between"
+      >
+        <div className="space-y-2">
           <h1 className="text-5xl font-extralight mb-2">Central HQ</h1>
           <p className="text-muted-foreground">
             Live system overview and client management console
           </p>
         </div>
         <div className="flex space-x-2">
-          <Button variant="outline" size="sm" onClick={() => { fetchData(); fetchSystemResources(); }} disabled={loading}>
+          <ModernButton variant="outline" size="sm" onClick={() => { fetchData(); fetchSystemResources(); }} disabled={loading}>
             <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             {loading ? 'Refreshing...' : 'Refresh'}
-          </Button>
+          </ModernButton>
         </div>
-      </div>
+      </motion.div>
 
       {/* Key Metrics */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="bg-muted/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-extralight">Total Clients</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? "..." : systemMetrics.totalClients}</div>
-            <p className="text-xs text-muted-foreground">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+      >
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
+          <div className="flex items-center justify-between space-y-0 pb-2">
+            <h3 className="text-sm font-extralight">Total Clients</h3>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Users className="h-4 w-4 text-primary" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-5xl font-extralight">{loading ? "..." : systemMetrics.totalClients}</div>
+            <p className="text-xs text-muted-foreground mt-2">
               registered clients
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-muted/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-extralight">Active Clients</CardTitle>
-            <UserCheck className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? "..." : systemMetrics.activeClients}</div>
-            <p className="text-xs text-muted-foreground">
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
+          <div className="flex items-center justify-between space-y-0 pb-2">
+            <h3 className="text-sm font-extralight">Active Clients</h3>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <UserCheck className="h-4 w-4 text-primary" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-5xl font-extralight">{loading ? "..." : systemMetrics.activeClients}</div>
+            <p className="text-xs text-muted-foreground mt-2">
               currently online
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-muted/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-extralight">Calls Today</CardTitle>
-            <Phone className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? "..." : systemMetrics.callsToday}</div>
-            <p className="text-xs text-muted-foreground">
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
+          <div className="flex items-center justify-between space-y-0 pb-2">
+            <h3 className="text-sm font-extralight">Calls Today</h3>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Phone className="h-4 w-4 text-primary" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-5xl font-extralight">{loading ? "..." : systemMetrics.callsToday}</div>
+            <p className="text-xs text-muted-foreground mt-2">
               across all clients
             </p>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card className="bg-muted/50">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-extralight">Revenue Today</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{loading ? "..." : `$${systemMetrics.revenueToday.toFixed(2)}`}</div>
-            <p className="text-xs text-muted-foreground">
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
+          <div className="flex items-center justify-between space-y-0 pb-2">
+            <h3 className="text-sm font-extralight">Revenue Today</h3>
+            <div className="p-2 rounded-lg bg-primary/10">
+              <DollarSign className="h-4 w-4 text-primary" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="text-5xl font-extralight">{loading ? "..." : `$${systemMetrics.revenueToday.toFixed(2)}`}</div>
+            <p className="text-xs text-muted-foreground mt-2">
               estimated revenue
             </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Client Management */}
-      <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+        className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+      >
         <div className="space-y-2">
-          <h2 className="text-2xl font-extralight">Client Management</h2>
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Users className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="text-2xl font-extralight">Client Management</h2>
+          </div>
           <p className="text-muted-foreground">
             Search and manage all client accounts ({clients.length} total, {systemMetrics.activeClients} active)
           </p>
@@ -360,10 +390,10 @@ const CentralHQ = () => {
               className="pl-10"
             />
           </div>
-          <Button variant="outline">
+          <ModernButton variant="outline">
             <Download className="mr-2 h-4 w-4" />
             Export Report
-          </Button>
+          </ModernButton>
         </div>
 
         <div className="space-y-4">
@@ -384,7 +414,7 @@ const CentralHQ = () => {
                 client.plan.toLowerCase().includes(searchQuery.toLowerCase())
               )
               .map((client) => (
-                <div key={client.id} className="flex items-center justify-between p-4 border rounded-lg bg-muted/50">
+                <div key={client.id} className="flex items-center justify-between p-4 border border-black/[0.08] dark:border-white/8 rounded-lg bg-black/[0.02] dark:bg-white/[0.02] hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors">
                   <div className="flex items-center gap-4">
                     <div className={`w-3 h-3 rounded-full ${getStatusColor(client.status)}`} />
                     <div>
@@ -399,19 +429,19 @@ const CentralHQ = () => {
                   </div>
                   <div className="flex items-center gap-4">
                     <Badge variant="secondary">{client.plan}</Badge>
-                    <Button
+                    <ModernButton
                       variant="outline"
                       size="sm"
                       onClick={() => window.open(`/${client.region.toLowerCase()}/plmb/${client.name.toLowerCase().replace(/\s+/g, '')}`, '_blank')}
                     >
                       View Dashboard
-                    </Button>
+                    </ModernButton>
                   </div>
                 </div>
               ))
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

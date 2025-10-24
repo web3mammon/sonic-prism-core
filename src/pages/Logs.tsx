@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ModernButton } from "@/components/ui/modern-button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
@@ -27,6 +27,8 @@ import {
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { supabase } from "@/integrations/supabase/client";
 import { SentimentIndicator } from "@/components/analytics/SentimentIndicator";
+import { motion } from "framer-motion";
+import { ScrollText } from "lucide-react";
 
 interface ConversationLog {
   id: string;
@@ -109,24 +111,33 @@ export default function Logs() {
   }
 
   return (
-    <div className="space-y-6 p-6 font-manrope relative">
+    <div className="space-y-8 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+      <div className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white" style={{
         backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }}></div>
 
-      <div className="space-y-2">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-2"
+      >
         <h1 className="text-5xl font-extralight mb-2">Call Conversation Logs</h1>
         <p className="text-muted-foreground">
           View detailed conversation transcripts and interactions
         </p>
-      </div>
+      </motion.div>
 
       {/* Summary Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
-        <Card className="bg-muted/50">
-          <CardContent className="p-6">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="grid gap-4 md:grid-cols-4"
+      >
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
             <div className="flex items-center space-x-3">
               <Phone className="h-5 w-5 text-blue-500" />
               <div>
@@ -134,10 +145,8 @@ export default function Logs() {
                 <p className="text-sm text-muted-foreground mt-2">Total Calls</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/50">
-          <CardContent className="p-6">
+        </div>
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
             <div className="flex items-center space-x-3">
               <MessageSquare className="h-5 w-5 text-green-500" />
               <div>
@@ -145,10 +154,8 @@ export default function Logs() {
                 <p className="text-sm text-muted-foreground mt-2">Messages</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/50">
-          <CardContent className="p-6">
+        </div>
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
             <div className="flex items-center space-x-3">
               <User className="h-5 w-5 text-purple-500" />
               <div>
@@ -156,10 +163,8 @@ export default function Logs() {
                 <p className="text-sm text-muted-foreground mt-2">User Messages</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-        <Card className="bg-muted/50">
-          <CardContent className="p-6">
+        </div>
+        <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
             <div className="flex items-center space-x-3">
               <Bot className="h-5 w-5 text-orange-500" />
               <div>
@@ -167,11 +172,16 @@ export default function Logs() {
                 <p className="text-sm text-muted-foreground mt-2">AI Responses</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
+        </div>
+      </motion.div>
 
-      <hr className="border-border" />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.2 }}
+      >
+        <hr className="border-black/[0.05] dark:border-white/5" />
+      </motion.div>
 
       {/* Log Viewer */}
       <div className="space-y-6">
@@ -278,28 +288,26 @@ export default function Logs() {
             // Show call list view
             <div className="space-y-3">
               {callsWithLogs.map((call) => (
-                <Card
+                <div
                   key={call.callSid}
-                  className="cursor-pointer hover:shadow-md transition-shadow bg-muted/50"
+                  className="cursor-pointer hover:shadow-md transition-shadow rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-4"
                   onClick={() => setSelectedCallSid(call.callSid)}
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Phone className="h-5 w-5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium">{call.callSid}</p>
-                          <p className="text-sm text-muted-foreground">
-                            {call.logs.length} messages • {new Date(call.timestamp).toLocaleString()}
-                          </p>
-                        </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Phone className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <p className="font-medium">{call.callSid}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {call.logs.length} messages • {new Date(call.timestamp).toLocaleString()}
+                        </p>
                       </div>
-                      <Button variant="ghost" size="sm">
-                        View Details
-                      </Button>
                     </div>
-                  </CardContent>
-                </Card>
+                    <Button variant="ghost" size="sm">
+                      View Details
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           )}

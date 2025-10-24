@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ModernButton } from "@/components/ui/modern-button";
 import { Badge } from "@/components/ui/badge";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useTenant } from "@/hooks/useTenant";
@@ -30,8 +30,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { Search, Download, Eye, Calendar, Filter } from "lucide-react";
+import { Search, Download, Eye, Calendar, Filter, Database, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import { motion } from "framer-motion";
 
 export default function CallData() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -180,29 +181,44 @@ export default function CallData() {
 
 
   return (
-    <div className="space-y-6 p-6 font-manrope relative">
+    <div className="space-y-8 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+      <div className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white" style={{
         backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }}></div>
 
-      <div className="space-y-2">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-2"
+      >
         <h1 className="text-5xl font-extralight mb-2">Call Data</h1>
         <p className="text-muted-foreground">
           View and analyze all incoming calls handled by your AI agent
         </p>
-      </div>
+      </motion.div>
 
       {/* Filters and Search */}
-      <Card className="bg-muted/50">
-        <CardHeader>
-          <CardTitle className="font-extralight">Call History</CardTitle>
-          <CardDescription>
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.1 }}
+        className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+      >
+        <div className="space-y-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Database className="h-5 w-5 text-primary" />
+            </div>
+            <h2 className="text-2xl font-extralight">Call History</h2>
+          </div>
+          <p className="text-muted-foreground text-sm">
             Search and filter through your call records
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+          </p>
+        </div>
+        <div>
           <div className="flex flex-col sm:flex-row gap-4 mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -266,14 +282,14 @@ export default function CallData() {
               </PopoverContent>
             </Popover>
 
-            <Button variant="outline" onClick={exportToCSV}>
+            <ModernButton variant="outline" onClick={exportToCSV}>
               <Download className="mr-2 h-4 w-4" />
               Export CSV
-            </Button>
+            </ModernButton>
           </div>
 
           {/* Call Data Table */}
-          <div className="border rounded-lg">
+          <div className="border border-black/[0.08] dark:border-white/8 rounded-xl overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -316,15 +332,19 @@ export default function CallData() {
             </Table>
           </div>
 
-          {filteredData.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
               No calls found matching your criteria
             </div>
-          )}
-        </CardContent>
-      </Card>
+          ) : null}
+        </div>
+      </motion.div>
 
-      <CallDetailModal 
+      <CallDetailModal
         call={selectedCall}
         open={modalOpen}
         onOpenChange={setModalOpen}

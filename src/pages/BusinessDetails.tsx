@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ModernButton } from "@/components/ui/modern-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,16 +9,20 @@ import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { 
-  Building2, 
-  MapPin, 
-  Clock, 
-  Phone, 
-  Mail, 
+import { motion } from "framer-motion";
+import {
+  Building2,
+  MapPin,
+  Clock,
+  Phone,
+  Mail,
   Save,
   Edit3,
   CheckCircle,
-  PhoneForwarded
+  PhoneForwarded,
+  Loader2,
+  Globe,
+  DollarSign
 } from "lucide-react";
 import {
   Tooltip,
@@ -40,6 +44,7 @@ export default function BusinessDetails() {
     businessType: "",
     phoneNumber: "",
     email: "",
+    websiteUrl: "",
     businessAddress: "",
     serviceArea: "",
     businessHours: "",
@@ -57,6 +62,7 @@ export default function BusinessDetails() {
         businessType: (profile as any)?.business_type || client?.industry || "",
         phoneNumber: (profile as any)?.phone_number || client?.phone_number || "",
         email: profile?.email || "",
+        websiteUrl: (profile as any)?.website_url || "",
         businessAddress: (profile as any)?.business_address || "",
         serviceArea: (profile as any)?.service_area || "",
         businessHours: (profile as any)?.business_hours || "",
@@ -88,6 +94,7 @@ export default function BusinessDetails() {
           business_name: formData.businessName,
           business_type: formData.businessType,
           phone_number: formData.phoneNumber,
+          website_url: formData.websiteUrl || null,
           business_address: formData.businessAddress,
           service_area: formData.serviceArea,
           business_hours: formData.businessHours,
@@ -139,6 +146,7 @@ export default function BusinessDetails() {
       businessType: (profile as any)?.business_type || client?.industry || "",
       phoneNumber: (profile as any)?.phone_number || client?.phone_number || "",
       email: profile?.email || "",
+      websiteUrl: (profile as any)?.website_url || "",
       businessAddress: (profile as any)?.business_address || "",
       serviceArea: (profile as any)?.service_area || "",
       businessHours: (profile as any)?.business_hours || "",
@@ -154,7 +162,7 @@ export default function BusinessDetails() {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
           <p className="text-muted-foreground">Loading business details...</p>
         </div>
       </div>
@@ -173,16 +181,21 @@ export default function BusinessDetails() {
   }
 
   return (
-    <div className="space-y-6 font-manrope relative">
+    <div className="space-y-8 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+      <div className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white" style={{
         backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }}></div>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between"
+      >
+        <div className="space-y-2">
           <h1 className="text-5xl font-extralight mb-2">Business Details</h1>
           <p className="text-muted-foreground">
             Manage your business information and service details
@@ -190,19 +203,19 @@ export default function BusinessDetails() {
         </div>
         <div className="flex space-x-2">
           {!isEditing ? (
-            <Button onClick={handleEdit} size="sm">
+            <ModernButton onClick={handleEdit} size="sm">
               <Edit3 className="mr-2 h-4 w-4" />
               Edit Details
-            </Button>
+            </ModernButton>
           ) : (
-            <div className="space-x-2">
-              <Button variant="outline" onClick={handleCancel} size="sm" disabled={isSaving}>
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={handleCancel} size="sm" disabled={isSaving} className="border-white/10 hover:bg-white/[0.02]">
                 Cancel
               </Button>
-              <Button onClick={handleSave} size="sm" disabled={isSaving}>
+              <ModernButton onClick={handleSave} size="sm" disabled={isSaving}>
                 {isSaving ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2"></div>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     Saving...
                   </>
                 ) : (
@@ -211,25 +224,32 @@ export default function BusinessDetails() {
                     Save Changes
                   </>
                 )}
-              </Button>
+              </ModernButton>
             </div>
           )}
         </div>
-      </div>
+      </motion.div>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Basic Information */}
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-extralight">
-              <Building2 className="h-5 w-5" />
-              Basic Information
-            </CardTitle>
-            <CardDescription>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Building2 className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Basic Information</h2>
+            </div>
+            <p className="text-muted-foreground text-sm">
               Core business details and contact information
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="businessName">Business Name</Label>
               {isEditing ? (
@@ -239,7 +259,7 @@ export default function BusinessDetails() {
                   onChange={(e) => handleInputChange("businessName", e.target.value)}
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
                   {formData.businessName || "Not specified"}
                 </div>
               )}
@@ -254,7 +274,7 @@ export default function BusinessDetails() {
                   onChange={(e) => handleInputChange("businessType", e.target.value)}
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
                   {formData.businessType || "Not specified"}
                 </div>
               )}
@@ -273,7 +293,7 @@ export default function BusinessDetails() {
                   onChange={(e) => handleInputChange("email", e.target.value)}
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
                   {formData.email || "Not specified"}
                 </div>
               )}
@@ -291,28 +311,55 @@ export default function BusinessDetails() {
                   onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
                   {formData.phoneNumber || "Not specified"}
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+
+            <div className="space-y-2">
+              <Label htmlFor="websiteUrl" className="flex items-center gap-1">
+                <Globe className="h-4 w-4" />
+                Website URL <span className="text-muted-foreground font-normal">(Optional)</span>
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="websiteUrl"
+                  type="url"
+                  value={formData.websiteUrl}
+                  onChange={(e) => handleInputChange("websiteUrl", e.target.value)}
+                  placeholder="https://example.com"
+                />
+              ) : (
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
+                  {formData.websiteUrl || "Not specified"}
+                </div>
+              )}
+            </div>
+          </div>
+        </motion.div>
 
         {/* Location & Service Area */}
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-extralight">
-              <MapPin className="h-5 w-5" />
-              Location & Service Area
-            </CardTitle>
-            <CardDescription>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <MapPin className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Location & Service Area</h2>
+            </div>
+            <p className="text-muted-foreground text-sm">
               Business address and areas you serve
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="businessAddress">Business Address</Label>
+              <Label htmlFor="businessAddress">Business Address <span className="text-muted-foreground font-normal">(Optional)</span></Label>
               {isEditing ? (
                 <Textarea
                   id="businessAddress"
@@ -321,14 +368,14 @@ export default function BusinessDetails() {
                   rows={3}
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm min-h-[80px]">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[80px]">
                   {formData.businessAddress || "Not specified"}
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="serviceArea">Service Area</Label>
+              <Label htmlFor="serviceArea">Service Area <span className="text-muted-foreground font-normal">(Optional - if applicable)</span></Label>
               {isEditing ? (
                 <Textarea
                   id="serviceArea"
@@ -338,28 +385,35 @@ export default function BusinessDetails() {
                   placeholder="Areas, suburbs, or regions you provide services to"
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm min-h-[80px]">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[80px]">
                   {formData.serviceArea || "Not specified"}
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* Business Hours */}
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-extralight">
-              <Clock className="h-5 w-5" />
-              Operating Hours
-            </CardTitle>
-            <CardDescription>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.3 }}
+          className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Clock className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Operating Hours</h2>
+            </div>
+            <p className="text-muted-foreground text-sm">
               When your business is available for service
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="businessHours">Business Hours</Label>
+              <Label htmlFor="businessHours">Business Hours <span className="text-muted-foreground font-normal">(Optional)</span></Label>
               {isEditing ? (
                 <Textarea
                   id="businessHours"
@@ -369,28 +423,35 @@ export default function BusinessDetails() {
                   placeholder="e.g. Mon-Fri: 8:00 AM - 6:00 PM, Sat: 9:00 AM - 4:00 PM, Sun: Closed"
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm min-h-[100px]">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[100px]">
                   {formData.businessHours || "Not specified"}
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* Services & Pricing */}
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-extralight">
-              <CheckCircle className="h-5 w-5" />
-              Services & Pricing
-            </CardTitle>
-            <CardDescription>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.4 }}
+          className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <DollarSign className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Services & Pricing</h2>
+            </div>
+            <p className="text-muted-foreground text-sm">
               Services offered and pricing information
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="servicesOffered">Services Offered</Label>
+              <Label htmlFor="servicesOffered">Services Offered <span className="text-muted-foreground font-normal">(Optional)</span></Label>
               {isEditing ? (
                 <Textarea
                   id="servicesOffered"
@@ -400,7 +461,7 @@ export default function BusinessDetails() {
                   placeholder="List the services your business provides"
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm min-h-[80px]">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[80px]">
                   {formData.servicesOffered || "Not specified"}
                 </div>
               )}
@@ -408,7 +469,10 @@ export default function BusinessDetails() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="serviceFee">Regular Service Fee</Label>
+                <Label htmlFor="serviceFee" className="flex items-center gap-1">
+                  <DollarSign className="h-4 w-4" />
+                  Regular Service Fee <span className="text-muted-foreground font-normal">(Optional)</span>
+                </Label>
                 {isEditing ? (
                   <Input
                     id="serviceFee"
@@ -418,14 +482,17 @@ export default function BusinessDetails() {
                     placeholder="0.00"
                   />
                 ) : (
-                  <div className="p-2 bg-muted rounded text-sm">
+                  <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
                     {formData.serviceFee ? `$${formData.serviceFee}` : "Not specified"}
                   </div>
                 )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="emergencyFee">Emergency Fee</Label>
+                <Label htmlFor="emergencyFee" className="flex items-center gap-1">
+                  <DollarSign className="h-4 w-4" />
+                  Emergency Fee <span className="text-muted-foreground font-normal">(Optional)</span>
+                </Label>
                 {isEditing ? (
                   <Input
                     id="emergencyFee"
@@ -435,7 +502,7 @@ export default function BusinessDetails() {
                     placeholder="0.00"
                   />
                 ) : (
-                  <div className="p-2 bg-muted rounded text-sm">
+                  <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
                     {formData.emergencyFee ? `$${formData.emergencyFee}` : "Not specified"}
                   </div>
                 )}
@@ -447,7 +514,7 @@ export default function BusinessDetails() {
                 <div className="flex items-center gap-2">
                   <Label htmlFor="callTransferNumber" className="flex items-center gap-1">
                     <PhoneForwarded className="h-4 w-4" />
-                    Transfer to Number
+                    Call Transfer Number <span className="text-muted-foreground font-normal">(Optional)</span>
                   </Label>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -470,13 +537,13 @@ export default function BusinessDetails() {
                   placeholder="+61412345678"
                 />
               ) : (
-                <div className="p-2 bg-muted rounded text-sm">
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
                   {formData.callTransferNumber || "Not configured - transfers disabled"}
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
       </div>
     </div>
   );

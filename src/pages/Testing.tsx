@@ -1,16 +1,17 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { ModernButton } from "@/components/ui/modern-button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Play, Phone, Square, Volume2, Download } from "lucide-react";
+import { Play, Phone, Square, Volume2, Download, Loader2, TestTube2 } from "lucide-react";
 import { useClientAPI } from "@/hooks/useClientAPI";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { motion } from "framer-motion";
 
 interface TestCall {
   id: string;
@@ -191,30 +192,45 @@ export default function Testing() {
   const currentCalls = testHistory.slice(startIndex, endIndex);
 
   return (
-    <div className="space-y-6 p-6 font-manrope relative">
+    <div className="space-y-8 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+      <div className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white" style={{
         backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }}></div>
 
-      <div className="space-y-2">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-2"
+      >
         <h1 className="text-5xl font-extralight mb-2">Testing Suite</h1>
         <p className="text-muted-foreground">
           Test your voice AI agent with custom scenarios and phone numbers
         </p>
-      </div>
+      </motion.div>
 
       <div className="grid gap-6 md:grid-cols-2 items-start">
         {/* Test Call Interface */}
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <CardTitle className="font-extralight">Manual Test Call</CardTitle>
-            <CardDescription>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+        >
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Phone className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Manual Test Call</h2>
+            </div>
+            <p className="text-muted-foreground text-sm">
               Initiate a test call to validate your AI agent's performance
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+            </p>
+          </div>
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="testNumber">Test Phone Number</Label>
               <Input
@@ -236,14 +252,15 @@ export default function Testing() {
               />
             </div>
 
-            <Button
+            <ModernButton
               className="w-full"
+              size="lg"
               onClick={handleStartTest}
               disabled={isCallActive || !testNumber || isLoading}
             >
               {isCallActive || isLoading ? (
                 <>
-                  <Square className="mr-2 h-4 w-4" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Call in Progress...
                 </>
               ) : (
@@ -252,44 +269,58 @@ export default function Testing() {
                   Start Test Call
                 </>
               )}
-            </Button>
+            </ModernButton>
 
             {isCallActive && (
-              <div className="mt-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-4 rounded-xl border border-green-500/20 bg-green-500/10"
+              >
                 <div className="flex items-center space-x-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-medium text-green-800 dark:text-green-200">
+                  <span className="text-sm font-medium text-green-500">
                     Test call active to {testNumber}
                   </span>
                 </div>
-              </div>
+              </motion.div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* Recent Test Calls */}
-        <div className="space-y-6 pt-6">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="space-y-6"
+        >
           <div className="space-y-2">
-            <h2 className="text-2xl font-extralight">Recent Test Calls</h2>
-            <p className="text-muted-foreground">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <TestTube2 className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Recent Test Calls</h2>
+            </div>
+            <p className="text-muted-foreground text-sm">
               History of your test calls - updates in real-time
             </p>
           </div>
           <div>
             {historyLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             ) : testHistory.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <p className="text-sm">No test calls yet</p>
-                <p className="text-xs mt-1">Start a test call to see it appear here</p>
+              <div className="text-center py-12 rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02]">
+                <p className="text-sm text-muted-foreground">No test calls yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Start a test call to see it appear here</p>
               </div>
             ) : (
               <>
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {currentCalls.map((test) => (
-                    <div key={test.id} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div key={test.id} className="flex items-center justify-between p-4 rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-all">
                       <div className="flex items-center space-x-3">
                         <div className={`w-2 h-2 rounded-full ${
                           test.status === "completed" ? "bg-green-500" :
@@ -324,7 +355,7 @@ export default function Testing() {
 
                 {/* Pagination */}
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4 border-t">
+                  <div className="flex items-center justify-between pt-4 border-t border-black/[0.05] dark:border-white/5">
                     <p className="text-sm text-muted-foreground">
                       Showing {startIndex + 1}-{Math.min(endIndex, testHistory.length)} of {testHistory.length} calls
                     </p>
@@ -334,6 +365,7 @@ export default function Testing() {
                         size="sm"
                         onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                         disabled={currentPage === 1}
+                        className="border-white/10 hover:bg-white/[0.02]"
                       >
                         Previous
                       </Button>
@@ -344,7 +376,7 @@ export default function Testing() {
                             variant={currentPage === page ? "default" : "outline"}
                             size="sm"
                             onClick={() => setCurrentPage(page)}
-                            className="w-8 h-8 p-0"
+                            className={currentPage === page ? "" : "w-8 h-8 p-0 border-white/10 hover:bg-white/[0.02]"}
                           >
                             {page}
                           </Button>
@@ -355,6 +387,7 @@ export default function Testing() {
                         size="sm"
                         onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                         disabled={currentPage === totalPages}
+                        className="border-white/10 hover:bg-white/[0.02]"
                       >
                         Next
                       </Button>
@@ -364,7 +397,7 @@ export default function Testing() {
               </>
             )}
           </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

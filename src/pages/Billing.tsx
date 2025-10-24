@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
+import { AnimatedNumber } from "@/components/ui/animated-number";
+import { ModernButton } from "@/components/ui/modern-button";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useTenant } from "@/hooks/useTenant";
 import { toast } from "sonner";
 import { PaymentModal } from "@/components/billing/PaymentModal";
 import { supabase } from "@/integrations/supabase/client";
+import { motion } from "framer-motion";
 import {
   CreditCard,
   DollarSign,
@@ -19,7 +20,9 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
-  Calendar
+  Calendar,
+  Zap,
+  ArrowRight
 } from "lucide-react";
 
 export default function Billing() {
@@ -140,83 +143,102 @@ export default function Billing() {
   }
 
   return (
-    <div className="space-y-6 p-6 font-manrope relative">
+    <div className="space-y-8 p-6 font-manrope relative">
       {/* Subtle background pattern */}
-      <div className="fixed inset-0 -z-10 opacity-[0.08] dark:opacity-[0.05]" style={{
+      <div className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white" style={{
         backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
         backgroundSize: '24px 24px'
       }}></div>
 
-      <div className="space-y-2">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+        className="space-y-2"
+      >
         <h1 className="text-5xl font-extralight mb-2">Billing & Credits</h1>
         <p className="text-muted-foreground">
           Manage your credits and payment methods
         </p>
-      </div>
+      </motion.div>
 
       {/* Row 1: Available Calls & Usage + Add Credits */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Left: Available Calls & This Month's Usage */}
-        <Card className="bg-muted/50">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-extralight">Available Calls</h2>
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Zap className="h-5 w-5 text-primary" />
               </div>
-              <Badge className={subscriptionActive ? "bg-green-500" : "bg-gray-500"}>
-                {subscriptionActive ? (
-                  <>
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    Active
-                  </>
-                ) : (
-                  "Inactive"
-                )}
-              </Badge>
+              <h2 className="text-2xl font-extralight">Available Calls</h2>
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-baseline gap-2">
-              <span className="text-5xl font-bold">{estimatedCallsRemaining + includedCalls}</span>
-              <span className="text-2xl text-muted-foreground">calls total</span>
+            <Badge className={subscriptionActive ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-gray-500/10 text-gray-500 border-gray-500/20"}>
+              {subscriptionActive ? (
+                <>
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  Active
+                </>
+              ) : (
+                "Inactive"
+              )}
+            </Badge>
+          </div>
+
+          {/* Total Calls */}
+          <div className="flex items-baseline gap-2">
+            <AnimatedNumber
+              value={estimatedCallsRemaining + includedCalls}
+              className="text-5xl font-extralight"
+            />
+            <span className="text-2xl text-muted-foreground">calls total</span>
+          </div>
+
+          {/* Breakdown */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-4 rounded-xl border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-primary"></div>
+                <span className="text-sm font-medium">{includedCalls} included calls</span>
+              </div>
+              <span className="text-sm text-muted-foreground">{currency.symbol}{subscriptionPrice}/mo</span>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-xl border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02]">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <span className="text-sm font-medium">{estimatedCallsRemaining} additional calls</span>
+              </div>
+              <span className="text-sm text-muted-foreground">{currency.symbol}{currentBalance} balance</span>
+            </div>
+
+            <div className="flex items-center justify-between text-sm pt-3 border-t border-black/[0.05] dark:border-white/5">
+              <span className="text-muted-foreground flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Next billing date
+              </span>
+              <span className="font-medium">{nextBillingDate}</span>
+            </div>
+          </div>
+
+          {/* This Month's Usage Section */}
+          <div className="pt-6 border-t border-black/[0.05] dark:border-white/5 space-y-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-primary" />
+              <h3 className="text-lg font-medium">This Month's Usage</h3>
             </div>
 
             <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-background/50">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-primary"></div>
-                  <span className="text-sm font-medium">{includedCalls} included calls</span>
-                </div>
-                <span className="text-sm text-muted-foreground">{currency.symbol}{subscriptionPrice}/mo subscription</span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-lg bg-background/50">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                  <span className="text-sm font-medium">{estimatedCallsRemaining} additional calls</span>
-                </div>
-                <span className="text-sm text-muted-foreground">{currency.symbol}{currentBalance} credit balance</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm pt-2 border-t">
-                <span className="text-muted-foreground flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  Next billing date
-                </span>
-                <span className="font-medium">{nextBillingDate}</span>
-              </div>
-            </div>
-
-            {/* This Month's Usage Section */}
-            <div className="pt-4 border-t space-y-3">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingUp className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold">This Month's Usage</h3>
-              </div>
-
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Total calls</span>
-                <span className="text-2xl font-bold">{callsUsedThisMonth}</span>
+                <AnimatedNumber value={callsUsedThisMonth} className="text-2xl font-extralight" />
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Included calls used</span>
@@ -225,10 +247,10 @@ export default function Billing() {
               {overageCalls > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Additional calls</span>
-                  <span className="text-lg font-medium">{overageCalls} calls</span>
+                  <span className="text-lg font-medium text-primary">{overageCalls} calls</span>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-2 border-t">
+              <div className="flex items-center justify-between pt-3 border-t border-black/[0.05] dark:border-white/5">
                 <span className="text-sm font-medium">Total this month</span>
                 <div className="text-right">
                   <div className="text-lg font-bold">{currency.symbol}{totalCost}</div>
@@ -240,13 +262,23 @@ export default function Billing() {
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </motion.div>
 
         {/* Right: Add Credits - Slider Based */}
-        <div className="space-y-6 pt-6">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.2 }}
+          className="space-y-6"
+        >
           <div className="space-y-2">
-            <h2 className="text-2xl font-extralight">Add Credits</h2>
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-primary/10">
+                <Plus className="h-5 w-5 text-primary" />
+              </div>
+              <h2 className="text-2xl font-extralight">Add Credits</h2>
+            </div>
             <p className="text-muted-foreground">
               Purchase credits for additional calls beyond your subscription
             </p>
@@ -285,7 +317,7 @@ export default function Billing() {
             </div>
           </div>
 
-          <div className="p-4 rounded-lg bg-muted/50 space-y-2">
+          <div className="p-5 rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Calls selected</span>
               <span className="font-medium">{topupCalls[0]} calls</span>
@@ -294,13 +326,13 @@ export default function Billing() {
               <span className="text-sm text-muted-foreground">Cost per call</span>
               <span className="font-medium">{currency.symbol}{callCost}</span>
             </div>
-            <div className="flex items-center justify-between pt-2 border-t">
+            <div className="flex items-center justify-between pt-2 border-t border-black/[0.05] dark:border-white/5">
               <span className="font-medium">Total amount</span>
               <span className="text-2xl font-bold">{currency.symbol}{topupAmount}</span>
             </div>
           </div>
 
-          <Button
+          <ModernButton
             className="w-full"
             size="lg"
             onClick={handleAddCredits}
@@ -308,7 +340,8 @@ export default function Billing() {
           >
             <Plus className="h-4 w-4 mr-2" />
             Add {currency.symbol}{topupAmount} Credits
-          </Button>
+            <ArrowRight className="h-4 w-4 ml-2" />
+          </ModernButton>
 
           <div className="grid grid-cols-3 gap-2">
             {[25, 50, 100].map((preset) => (
@@ -317,19 +350,30 @@ export default function Billing() {
                 variant="outline"
                 size="sm"
                 onClick={() => setTopupCalls([preset])}
-                className="text-xs"
+                className="text-xs border-white/10 hover:bg-white/[0.02] hover:border-white/20 transition-all"
               >
                 {preset} calls
               </Button>
             ))}
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      <hr className="border-border" />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.4, delay: 0.3 }}
+      >
+        <hr className="border-black/[0.05] dark:border-white/5" />
+      </motion.div>
 
       {/* Row 2: Payment Method & Invoice History - Merged */}
-      <div className="space-y-6">
+      <motion.div
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.4 }}
+        className="space-y-6"
+      >
         <div className="flex items-center justify-between">
           <div className="space-y-2">
             <h2 className="text-2xl font-extralight flex items-center gap-2">
@@ -340,44 +384,44 @@ export default function Billing() {
               Manage your payment methods and download invoices
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={handleDownloadInvoice}>
+          <ModernButton variant="outline" size="sm" onClick={handleDownloadInvoice}>
             <Download className="h-4 w-4 mr-2" />
             Export All
-          </Button>
+          </ModernButton>
         </div>
 
         <div className="space-y-6">
           {/* Payment Method Section */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Payment Method</h3>
-            <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-              <div className="flex items-center justify-center w-10 h-10 rounded bg-background">
+            <div className="flex items-center gap-4 p-4 rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02]">
+              <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-white/[0.05] border border-white/5">
                 <CreditCard className="h-5 w-5 text-muted-foreground" />
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium">No payment method added</p>
                 <p className="text-xs text-muted-foreground">Add a card to auto-refill credits</p>
               </div>
-              <Button
+              <ModernButton
                 size="sm"
                 onClick={handleAddCredits}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Card
-              </Button>
+              </ModernButton>
             </div>
           </div>
 
           {/* Invoice History Section */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Invoice History</h3>
-            <div className="text-center py-8 text-muted-foreground border rounded-lg bg-muted/20">
-              <p>No invoices yet</p>
-              <p className="text-sm">Your purchase history will appear here</p>
+            <div className="text-center py-12 text-muted-foreground rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02]">
+              <p className="font-medium">No invoices yet</p>
+              <p className="text-sm mt-1">Your purchase history will appear here</p>
             </div>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* Payment Modal */}
       <PaymentModal
