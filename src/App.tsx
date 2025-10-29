@@ -29,6 +29,7 @@ import BusinessDetails from "./pages/BusinessDetails";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
 import Leads from "./pages/Leads";
+import Calendar from "./pages/Calendar";
 import Auth from "./pages/Auth";
 import Login from "./pages/Login";
 import BusinessSetup from "./pages/BusinessSetup";
@@ -98,6 +99,7 @@ const App = () => (
                           <Route path="/business-details" element={<BusinessDetails />} />
                           <Route path="/integrations" element={<Integrations />} />
                           <Route path="/billing" element={<Billing />} />
+                          <Route path="/calendar" element={<Calendar />} />
                           <Route path="/leads" element={<Leads />} />
                           <Route path="/testing" element={<Testing />} />
                           <Route path="/call-data" element={<CallData />} />

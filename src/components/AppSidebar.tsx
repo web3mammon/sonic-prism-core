@@ -15,6 +15,7 @@ import {
   CreditCard,
   MessageSquare,
   Users,
+  Calendar,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -87,6 +88,7 @@ export function AppSidebar() {
 
       // Universal pages - always show
       { title: "Analytics", url: `${basePath}/analytics`, icon: BarChart3 },
+      { title: "Calendar", url: `${basePath}/calendar`, icon: Calendar },
       { title: "Leads", url: `${basePath}/leads`, icon: Users },
       { title: "Integrations", url: `${basePath}/integrations`, icon: Plug },
       { title: "Billing", url: `${basePath}/billing`, icon: CreditCard },
