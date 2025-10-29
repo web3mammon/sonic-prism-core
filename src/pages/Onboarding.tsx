@@ -643,7 +643,7 @@ export default function Onboarding() {
 
             {/* Website URL Input */}
             {!isAnalyzing && (
-              <form onSubmit={(e) => { e.preventDefault(); if (websiteUrl) handleAnalyzeWebsite(); }} className="space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); if (websiteUrl) handleAnalyzeWebsite(); }} noValidate className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     What's your website URL?
@@ -1049,7 +1049,7 @@ export default function Onboarding() {
               if (!isCreatingAccount && fullName && email && password && agreeToTerms && validateEmail(email)) {
                 handleCreateAccount();
               }
-            }} className="space-y-6">
+            }} noValidate className="space-y-6">
               {/* Full Name */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Full Name *</label>
