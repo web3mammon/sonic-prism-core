@@ -603,7 +603,7 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
         messages,
-        max_tokens: 150,  // ⚡ FASTER: Shorter responses (was 200)
+        max_tokens: 150,
         temperature: 0.7,
         stream: true
       })

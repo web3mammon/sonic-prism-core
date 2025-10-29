@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigate, useLocation, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Loader2 } from 'lucide-react';
 
 export default function Login() {
   const { user, signIn, profile } = useAuth();
@@ -15,9 +15,53 @@ export default function Login() {
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [resetMode, setResetMode] = useState(false);
+  const [clientData, setClientData] = useState<any>(null);
+  const [fetchingClient, setFetchingClient] = useState(true);
+
+  // Fetch client data when user is authenticated
+  useEffect(() => {
+    async function fetchClientData() {
+      if (!user?.id) {
+        setFetchingClient(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('voice_ai_clients')
+          .select('region, industry, clientname, status')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .single();
+
+        if (error) {
+          console.error('Error fetching client:', error);
+          setClientData(null);
+        } else {
+          setClientData(data);
+        }
+      } catch (error) {
+        console.error('Error fetching client:', error);
+        setClientData(null);
+      } finally {
+        setFetchingClient(false);
+      }
+    }
+
+    fetchClientData();
+  }, [user?.id]);
 
   // Redirect if already authenticated
   if (user && profile) {
+    // Still loading client data
+    if (fetchingClient) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+
     const extendedProfile = profile as any;
 
     // If business setup not complete, redirect to onboarding
@@ -25,10 +69,19 @@ export default function Login() {
       return <Navigate to="/onboarding" replace />;
     }
 
-    // If setup is complete, redirect to dashboard
-    // TODO: Get actual dashboard URL from profile/client data
-    const from = location.state?.from?.pathname || '/au/plmb/acmeplumbing';
-    return <Navigate to={from} replace />;
+    // If no client exists, show error and redirect to onboarding
+    if (!clientData) {
+      toast({
+        title: "No active client found",
+        description: "Please complete onboarding to create your client.",
+        variant: "destructive",
+      });
+      return <Navigate to="/onboarding" replace />;
+    }
+
+    // If setup is complete, redirect to actual dashboard
+    const dashboardUrl = `/${clientData.region}/${clientData.industry}/${clientData.clientname}`;
+    return <Navigate to={dashboardUrl} replace />;
   }
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
