@@ -111,9 +111,9 @@ export default function Calendar() {
     setView(newView);
   };
 
-  // Custom event style function
+  // Custom event style function - uses red/primary color scheme
   const eventStyleGetter = (event: any) => {
-    let backgroundColor = '#3b82f6'; // blue for scheduled
+    let backgroundColor = 'hsl(var(--primary))'; // primary red for scheduled
 
     if (event.status === 'completed') {
       backgroundColor = '#10b981'; // green
@@ -143,31 +143,33 @@ export default function Calendar() {
     .slice(0, 3);
 
   return (
-    <div className="min-h-screen p-6 md:p-8">
+    <div className="space-y-8 p-6 font-manrope relative">
+      {/* Dotted background pattern */}
+      <div
+        className="fixed inset-0 -z-10 opacity-[0.08] text-black dark:text-white"
+        style={{
+          backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
+          backgroundSize: '24px 24px'
+        }}
+      />
+
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="mb-8"
+        transition={{ duration: 0.4 }}
+        className="flex items-center justify-between"
       >
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-primary/10">
-              <CalendarIcon className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl font-light">Calendar</h1>
-              <p className="text-muted-foreground text-sm mt-1">
-                Manage your AI-booked appointments
-              </p>
-            </div>
-          </div>
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Appointment
-          </Button>
+        <div className="space-y-2">
+          <h1 className="text-5xl font-extralight mb-2">Calendar</h1>
+          <p className="text-muted-foreground">
+            Manage your AI-booked appointments
+          </p>
         </div>
+        <Button className="gap-2">
+          <Plus className="h-4 w-4" />
+          New Appointment
+        </Button>
       </motion.div>
 
       {/* Stats Row */}
@@ -177,19 +179,19 @@ export default function Calendar() {
         transition={{ duration: 0.5, delay: 0.1 }}
         className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6"
       >
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Total</p>
               <p className="text-2xl font-light mt-1">{appointments.length}</p>
             </div>
-            <div className="p-2 rounded-lg bg-blue-500/10">
-              <CalendarIcon className="h-5 w-5 text-blue-500" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <CalendarIcon className="h-5 w-5 text-primary" />
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Scheduled</p>
@@ -203,7 +205,7 @@ export default function Calendar() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">Completed</p>
@@ -217,7 +219,7 @@ export default function Calendar() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-muted-foreground">This Month</p>
@@ -227,8 +229,8 @@ export default function Calendar() {
                 ).length}
               </p>
             </div>
-            <div className="p-2 rounded-lg bg-purple-500/10">
-              <CalendarIcon className="h-5 w-5 text-purple-500" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <CalendarIcon className="h-5 w-5 text-primary" />
             </div>
           </div>
         </div>
@@ -240,7 +242,7 @@ export default function Calendar() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.2 }}
-          className="lg:col-span-3 rounded-2xl border border-white/8 bg-white/[0.02] p-6 calendar-container"
+          className="lg:col-span-3 rounded-2xl border border-border bg-card p-6 calendar-container"
         >
           <BigCalendar
             localizer={localizer}
@@ -266,7 +268,7 @@ export default function Calendar() {
           className="space-y-4"
         >
           {/* Upcoming Section */}
-          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <h3 className="font-medium mb-4">Upcoming</h3>
             {upcomingAppointments.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-8">
@@ -277,7 +279,7 @@ export default function Calendar() {
                 {upcomingAppointments.map((apt) => (
                   <div
                     key={apt.id}
-                    className="p-3 rounded-lg border border-white/5 bg-white/[0.01] hover:bg-white/[0.03] transition-colors cursor-pointer"
+                    className="p-3 rounded-lg border border-border bg-card/50 hover:bg-card transition-colors cursor-pointer"
                     onClick={() => handleSelectEvent(apt)}
                   >
                     <div className="flex items-start justify-between mb-2">
@@ -304,7 +306,7 @@ export default function Calendar() {
           </div>
 
           {/* Quick Actions */}
-          <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-4">
+          <div className="rounded-2xl border border-border bg-card p-4">
             <h3 className="font-medium mb-4">Quick Actions</h3>
             <div className="space-y-2">
               <Button variant="outline" className="w-full justify-start gap-2" size="sm">
@@ -353,7 +355,7 @@ export default function Calendar() {
 
           <div className="space-y-4 mt-4">
             {/* Duration */}
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/5">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <div className="flex-1">
                 <p className="text-sm text-muted-foreground">Duration</p>
@@ -367,7 +369,7 @@ export default function Calendar() {
 
             {/* Contact Information */}
             {selectedAppointment?.customer_email && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/5">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
                 <Mail className="h-4 w-4 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground">Email</p>
@@ -377,7 +379,7 @@ export default function Calendar() {
             )}
 
             {selectedAppointment?.customer_phone && (
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/5">
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border">
                 <Phone className="h-4 w-4 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground">Phone</p>
@@ -388,7 +390,7 @@ export default function Calendar() {
 
             {/* Notes */}
             {selectedAppointment?.notes && (
-              <div className="p-3 rounded-lg bg-white/[0.02] border border-white/5">
+              <div className="p-3 rounded-lg bg-card border border-border">
                 <p className="text-sm text-muted-foreground mb-2">Notes</p>
                 <p className="text-sm">{selectedAppointment.notes}</p>
               </div>
@@ -424,15 +426,15 @@ export default function Calendar() {
       <style>{`
         .calendar-container .rbc-calendar {
           font-family: inherit;
-          color: inherit;
+          color: hsl(var(--foreground));
         }
 
         .calendar-container .rbc-header {
           padding: 12px 6px;
           font-weight: 500;
           font-size: 14px;
-          color: rgba(255, 255, 255, 0.7);
-          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          color: hsl(var(--muted-foreground));
+          border-bottom: 1px solid hsl(var(--border));
         }
 
         .calendar-container .rbc-month-view {
@@ -441,19 +443,19 @@ export default function Calendar() {
 
         .calendar-container .rbc-month-row {
           border: none;
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
+          border-top: 1px solid hsl(var(--border) / 0.5);
         }
 
         .calendar-container .rbc-day-bg {
-          border-left: 1px solid rgba(255, 255, 255, 0.05);
+          border-left: 1px solid hsl(var(--border) / 0.5);
         }
 
         .calendar-container .rbc-today {
-          background-color: rgba(59, 130, 246, 0.1);
+          background-color: hsl(var(--primary) / 0.1);
         }
 
         .calendar-container .rbc-off-range-bg {
-          background-color: rgba(255, 255, 255, 0.01);
+          background-color: hsl(var(--muted) / 0.2);
         }
 
         .calendar-container .rbc-date-cell {
@@ -462,12 +464,12 @@ export default function Calendar() {
         }
 
         .calendar-container .rbc-button-link {
-          color: rgba(255, 255, 255, 0.9);
+          color: hsl(var(--foreground));
           font-size: 14px;
         }
 
         .calendar-container .rbc-today .rbc-button-link {
-          color: rgb(59, 130, 246);
+          color: hsl(var(--primary));
           font-weight: 600;
         }
 
@@ -489,9 +491,9 @@ export default function Calendar() {
         }
 
         .calendar-container .rbc-toolbar button {
-          color: rgba(255, 255, 255, 0.9);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          background-color: rgba(255, 255, 255, 0.02);
+          color: hsl(var(--foreground));
+          border: 1px solid hsl(var(--border));
+          background-color: hsl(var(--card));
           padding: 8px 16px;
           border-radius: 8px;
           font-size: 14px;
@@ -499,26 +501,26 @@ export default function Calendar() {
         }
 
         .calendar-container .rbc-toolbar button:hover {
-          background-color: rgba(255, 255, 255, 0.05);
-          border-color: rgba(255, 255, 255, 0.2);
+          background-color: hsl(var(--accent));
+          border-color: hsl(var(--border));
         }
 
         .calendar-container .rbc-toolbar button.rbc-active {
-          background-color: rgb(59, 130, 246);
-          border-color: rgb(59, 130, 246);
-          color: white;
+          background-color: hsl(var(--primary));
+          border-color: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
         }
 
         .calendar-container .rbc-toolbar-label {
           font-size: 18px;
           font-weight: 500;
-          color: rgba(255, 255, 255, 0.9);
+          color: hsl(var(--foreground));
         }
 
         .calendar-container .rbc-time-view,
         .calendar-container .rbc-time-header {
           border: none;
-          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          border-top: 1px solid hsl(var(--border));
         }
 
         .calendar-container .rbc-time-content {
@@ -526,19 +528,35 @@ export default function Calendar() {
         }
 
         .calendar-container .rbc-time-slot {
-          border-top: 1px solid rgba(255, 255, 255, 0.05);
+          border-top: 1px solid hsl(var(--border) / 0.5);
         }
 
         .calendar-container .rbc-timeslot-group {
-          border-left: 1px solid rgba(255, 255, 255, 0.08);
+          border-left: 1px solid hsl(var(--border));
         }
 
         .calendar-container .rbc-day-slot .rbc-time-slot {
-          border-top: 1px solid rgba(255, 255, 255, 0.03);
+          border-top: 1px solid hsl(var(--border) / 0.3);
         }
 
         .calendar-container .rbc-current-time-indicator {
-          background-color: rgb(59, 130, 246);
+          background-color: hsl(var(--primary));
+        }
+
+        .calendar-container .rbc-time-header-content {
+          border-left: 1px solid hsl(var(--border) / 0.5);
+        }
+
+        .calendar-container .rbc-time-content > * + * > * {
+          border-left: 1px solid hsl(var(--border) / 0.5);
+        }
+
+        .calendar-container .rbc-day-bg + .rbc-day-bg {
+          border-left: 1px solid hsl(var(--border) / 0.5);
+        }
+
+        .calendar-container .rbc-header + .rbc-header {
+          border-left: 1px solid hsl(var(--border) / 0.5);
         }
       `}</style>
     </div>
