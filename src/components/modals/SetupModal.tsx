@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,7 +7,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Copy, Check, Phone, Code } from "lucide-react";
+import { Copy, Check, Phone, Code, ExternalLink } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Link } from "react-router-dom";
+import { useTenant } from "@/hooks/useTenant";
 
 interface SetupModalProps {
   isOpen: boolean;
@@ -26,19 +29,45 @@ export function SetupModal({
 }: SetupModalProps) {
   const [copiedPhone, setCopiedPhone] = useState(false);
   const [copiedWidget, setCopiedWidget] = useState(false);
-
-  // Debug logging
-  console.log('SetupModal props:', { isOpen, channelType, twilioPhoneNumber, clientId });
+  const [widgetCode, setWidgetCode] = useState("");
+  const [loadingWidget, setLoadingWidget] = useState(false);
+  const { region, industry, clientname } = useTenant();
 
   const showPhone = channelType === "phone" || channelType === "both";
   const showWidget = channelType === "website" || channelType === "both";
 
-  console.log('SetupModal display flags:', { showPhone, showWidget });
+  // Fetch actual widget embed code from database
+  useEffect(() => {
+    async function fetchWidgetCode() {
+      if (!clientId || !showWidget) return;
 
-  // Widget embed code
-  const widgetCode = clientId
-    ? `<script src="https://btqccksigmohyjdxgrrj.supabase.co/storage/v1/object/public/widgets/klariqo-widget.js?client_id=${clientId}"></script>`
-    : "";
+      setLoadingWidget(true);
+      try {
+        const { data, error } = await supabase
+          .from('widget_config')
+          .select('embed_code')
+          .eq('client_id', clientId)
+          .single();
+
+        if (error) throw error;
+
+        if (data?.embed_code) {
+          setWidgetCode(data.embed_code);
+        } else {
+          // Fallback to basic code if no config exists
+          setWidgetCode(`<script src="https://btqccksigmohyjdxgrrj.supabase.co/storage/v1/object/public/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+        }
+      } catch (error) {
+        console.error('Error fetching widget code:', error);
+        // Fallback to basic code
+        setWidgetCode(`<script src="https://btqccksigmohyjdxgrrj.supabase.co/storage/v1/object/public/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+      } finally {
+        setLoadingWidget(false);
+      }
+    }
+
+    fetchWidgetCode();
+  }, [clientId, showWidget, isOpen]);
 
   const handleCopyPhone = () => {
     if (twilioPhoneNumber) {
@@ -128,9 +157,19 @@ export function SetupModal({
           {/* Website Widget Section */}
           {showWidget && (
             <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Code className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-medium">Website Widget Setup</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Code className="h-5 w-5 text-primary" />
+                  <h3 className="text-lg font-medium">Website Widget Setup</h3>
+                </div>
+                <Link
+                  to={`/${region}/${industry}/${clientname}/widget-settings`}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                  onClick={onClose}
+                >
+                  Customize Widget
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
               </div>
 
               <div className="bg-muted/50 p-4 rounded-lg space-y-3">
@@ -139,27 +178,36 @@ export function SetupModal({
                     Embed Code:
                   </label>
                   <div className="flex items-start gap-2 mt-1">
-                    <code className="flex-1 bg-background px-3 py-2 rounded border text-xs font-mono break-all whitespace-pre-wrap max-w-full overflow-hidden">
-                      {widgetCode}
-                    </code>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCopyWidget}
-                      className="shrink-0"
-                    >
-                      {copiedWidget ? (
-                        <>
-                          <Check className="h-4 w-4 mr-1" />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4 mr-1" />
-                          Copy
-                        </>
-                      )}
-                    </Button>
+                    {loadingWidget ? (
+                      <div className="flex-1 bg-background px-3 py-2 rounded border text-xs text-muted-foreground italic">
+                        Loading widget code...
+                      </div>
+                    ) : (
+                      <>
+                        <code className="flex-1 bg-background px-3 py-2 rounded border text-xs font-mono break-all whitespace-pre-wrap max-w-full overflow-hidden">
+                          {widgetCode}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleCopyWidget}
+                          className="shrink-0"
+                          disabled={!widgetCode}
+                        >
+                          {copiedWidget ? (
+                            <>
+                              <Check className="h-4 w-4 mr-1" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4 mr-1" />
+                              Copy
+                            </>
+                          )}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -171,6 +219,16 @@ export function SetupModal({
                       Paste it before the <code>&lt;/body&gt;</code> tag in your HTML
                     </li>
                     <li>The widget will appear on all pages automatically</li>
+                    <li>
+                      Customize colors, position, and more in{" "}
+                      <Link
+                        to={`/${region}/${industry}/${clientname}/widget-settings`}
+                        className="text-primary hover:underline"
+                        onClick={onClose}
+                      >
+                        Widget Settings
+                      </Link>
+                    </li>
                   </ol>
                 </div>
               </div>
