@@ -210,8 +210,7 @@ const CentralHQ = () => {
     status: client.live_status || client.status || 'unknown',
     plan: 'premium', // Default plan
     lastActive: client.last_call ? new Date(client.last_call).toLocaleString() : (client.last_ping ? 'Active' : 'Never'),
-    callsToday: client.calls_today || 0,
-    port: client.port || 3011
+    callsToday: client.calls_today || 0
   }));
 
   // Generate alerts based on real data
@@ -423,7 +422,7 @@ const CentralHQ = () => {
                         {client.name}
                       </div>
                       <div className="text-sm text-muted-foreground">
-                        {client.region} • Port {client.port} • {client.callsToday} calls today • Last: {client.lastActive}
+                        {client.region} • {client.callsToday} calls today • Last: {client.lastActive}
                       </div>
                     </div>
                   </div>

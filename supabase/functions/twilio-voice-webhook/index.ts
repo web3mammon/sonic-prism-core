@@ -1,13 +1,19 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildVoiceOptimizedPrompt, normalizeForTTS } from "../_shared/voice-utils.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// FlexPrice API configuration
+const FLEXPRICE_API_KEY = Deno.env.get('FLEXPRICE_API_KEY');
+const FLEXPRICE_BASE_URL = Deno.env.get('FLEXPRICE_BASE_URL') || 'https://api.cloud.flexprice.io/v1';
+
 interface TwilioVoiceSession {
   client: any;
+  voiceProfile: any; // Voice profile from voice_profiles table
   callSid: string;
   callerNumber: string;
   streamSid: string | null;
@@ -28,6 +34,9 @@ interface TwilioVoiceSession {
   audioChunkBuffer: { [index: number]: Uint8Array };
   nextChunkToSend: number;
   currentSocket: WebSocket | null;
+  // Keepalive timers
+  deepgramKeepaliveTimer: number | null;
+  supabaseKeepaliveTimer: number | null;
 }
 
 const sessions = new Map<string, TwilioVoiceSession>();
@@ -157,6 +166,19 @@ async function initializeDeepgram(callSid: string, twilioSocket: WebSocket): Pro
         clearTimeout(timeout);
         console.log('[Deepgram] Connected (μ-law 8kHz for Twilio)');
         session.deepgramConnection = deepgramWs;
+
+        // Start keepalive to prevent Deepgram timeout (send every 5 seconds)
+        session.deepgramKeepaliveTimer = setInterval(() => {
+          if (deepgramWs.readyState === WebSocket.OPEN) {
+            try {
+              deepgramWs.send(JSON.stringify({ type: 'KeepAlive' }));
+              console.log('[Deepgram] Keepalive sent');
+            } catch (error) {
+              console.error('[Deepgram] Keepalive error:', error);
+            }
+          }
+        }, 5000); // Every 5 seconds
+
         resolve(true);
       };
 
@@ -262,6 +284,69 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
 
       console.log(`[Twilio] ✅ Client loaded: ${client.business_name}`);
 
+      // Check user access (trial + subscription logic)
+      const accessCheck = await checkUserAccess(client);
+
+      if (!accessCheck.allowed) {
+        console.log(`[Access] ❌ Access denied - ${accessCheck.reason}`);
+
+        // Determine rejection message based on reason
+        let rejectionMessage = "Thank you for calling. ";
+        if (accessCheck.reason === 'trial_expired_time') {
+          rejectionMessage += "Your 3-day free trial has expired. Please visit your dashboard to upgrade your plan and continue using our service.";
+        } else if (accessCheck.reason === 'trial_expired_credits') {
+          rejectionMessage += "You have used all 10 free trial calls. Please visit your dashboard to upgrade your plan and continue making calls.";
+        } else {
+          rejectionMessage += "Your account has run out of credits. Please visit your dashboard to add more credits or upgrade your plan.";
+        }
+
+        // Load voice profile first to get correct voice for rejection message
+        let rejectionVoiceId = client.voice_id || 'pNInz6obpgDQGcFmaJgB'; // Default to Adam
+
+        try {
+          const audioResponse = await generateTTS(rejectionMessage, rejectionVoiceId);
+          if (audioResponse && streamSid) {
+            socket.send(JSON.stringify({
+              event: 'media',
+              streamSid: streamSid,
+              media: { payload: audioResponse }
+            }));
+
+            // Wait a bit for audio to play, then hang up
+            await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds for longer message
+          }
+        } catch (error) {
+          console.error('[Twilio] Error playing rejection message:', error);
+        }
+
+        // Hang up the call
+        socket.send(JSON.stringify({
+          event: 'stop',
+          streamSid: streamSid
+        }));
+        socket.close();
+        return;
+      }
+
+      console.log(`[Access] ✅ Access granted - ${accessCheck.reason}`);
+
+      // Load voice profile
+      let voiceProfile = null;
+      if (client.voice_id) {
+        const { data: profile, error: profileError } = await supabaseClient
+          .from('voice_profiles')
+          .select('*')
+          .eq('voice_id', client.voice_id)
+          .single();
+
+        if (profileError) {
+          console.error('[Twilio] Failed to load voice profile:', profileError);
+        } else {
+          voiceProfile = profile;
+          console.log(`[Twilio] ✅ Voice profile loaded: ${profile.name} (${profile.accent})`);
+        }
+      }
+
       // Check if database session already exists (from test-voice-call or webhook)
       const { data: existingSession } = await supabaseClient
         .from('call_sessions')
@@ -312,6 +397,7 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
       // Create in-memory session
       const newSession: TwilioVoiceSession = {
         client,
+        voiceProfile, // Voice profile from database
         callSid,
         callerNumber: caller || '',
         streamSid,
@@ -331,6 +417,9 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         audioChunkBuffer: {},
         nextChunkToSend: 0,
         currentSocket: socket,
+        // Keepalive timers
+        deepgramKeepaliveTimer: null,
+        supabaseKeepaliveTimer: null,
       };
 
       sessions.set(callSid, newSession);
@@ -342,6 +431,22 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         console.error('[Twilio] Failed to initialize Deepgram');
         socket.close();
         return;
+      }
+
+      // Start Supabase keepalive to prevent 150s idle timeout (send ping every 30s)
+      const currentSession = sessions.get(callSid);
+      if (currentSession) {
+        currentSession.supabaseKeepaliveTimer = setInterval(() => {
+          try {
+            socket.send(JSON.stringify({
+              event: 'ping',
+              timestamp: Date.now()
+            }));
+            console.log('[Supabase] Keepalive ping sent to prevent timeout');
+          } catch (error) {
+            console.error('[Supabase] Keepalive ping error:', error);
+          }
+        }, 30000); // Every 30 seconds
       }
 
       // Play pre-recorded intro immediately (instant, pre-warms connections)
@@ -464,8 +569,21 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
     return;
   }
 
-  // Build system prompt (from FastAPI router.py logic)
-  const systemPrompt = buildSystemPrompt(session);
+  // Build voice-optimized system prompt using voice profile
+  const systemPrompt = session.voiceProfile
+    ? buildVoiceOptimizedPrompt(
+        {
+          business_name: session.client.business_name,
+          region: session.client.region,
+          industry: session.client.industry,
+          system_prompt: session.client.system_prompt,
+          channel_type: 'phone',
+          business_hours: session.client.business_hours,
+          timezone: session.client.timezone
+        },
+        session.voiceProfile
+      )
+    : buildSystemPromptFallback(session); // Fallback if no voice profile
 
   try {
     const messages = [
@@ -650,9 +768,12 @@ async function generateAndStreamTTS(callSid: string, text: string, socket: WebSo
 
   const voiceId = session.client.voice_id || 'YhNmhaaLcHbuyfVn0UeL';
 
+  // Normalize text for TTS (convert numbers to words, etc.)
+  const normalizedText = normalizeForTTS(text);
+
   try {
     const startTime = Date.now();
-    console.log(`[ElevenLabs #${chunkIndex}] Generating TTS for: "${text.substring(0, 50)}..."`);
+    console.log(`[ElevenLabs #${chunkIndex}] Generating TTS for: "${normalizedText.substring(0, 50)}..."`);
 
     // Use STREAMING endpoint like FastAPI does
     const response = await fetch(
@@ -665,7 +786,7 @@ async function generateAndStreamTTS(callSid: string, text: string, socket: WebSo
           'xi-api-key': ELEVENLABS_API_KEY
         },
         body: JSON.stringify({
-          text: text,
+          text: normalizedText,
           model_id: 'eleven_flash_v2_5',
           voice_settings: {
             stability: 0.5,
@@ -730,7 +851,7 @@ async function generateAndStreamTTS(callSid: string, text: string, socket: WebSo
   }
 }
 
-function buildSystemPrompt(session: TwilioVoiceSession): string {
+function buildSystemPromptFallback(session: TwilioVoiceSession): string {
   const client = session.client;
   const businessName = client.business_name || 'the business';
 
@@ -804,6 +925,16 @@ async function finalizeCallSession(callSid: string) {
   const session = sessions.get(callSid);
   if (!session) return;
 
+  // Clear keepalive timers
+  if (session.deepgramKeepaliveTimer) {
+    clearInterval(session.deepgramKeepaliveTimer);
+    console.log('[Deepgram] Keepalive timer cleared');
+  }
+  if (session.supabaseKeepaliveTimer) {
+    clearInterval(session.supabaseKeepaliveTimer);
+    console.log('[Supabase] Keepalive timer cleared');
+  }
+
   const duration = Math.floor((Date.now() - session.sessionStartTime) / 1000);
 
   // Save conversation logs
@@ -837,6 +968,47 @@ async function finalizeCallSession(callSid: string) {
     .eq('call_sid', callSid);
 
   console.log(`[Twilio] ✅ Call completed: ${duration}s`);
+
+  // Extract and save lead information from conversation
+  if (session && session.conversationLog.length > 0) {
+    await extractAndSaveLead(session);
+  }
+
+  // Increment trial_calls_used (phone call completed)
+  if (session && session.client) {
+    try {
+      const { error } = await session.supabase.rpc('increment', {
+        table_name: 'voice_ai_clients',
+        column_name: 'trial_calls_used',
+        row_id: session.client.id
+      });
+
+      if (error) {
+        // Fallback to manual increment if RPC doesn't exist
+        const { data: clientData } = await session.supabase
+          .from('voice_ai_clients')
+          .select('trial_calls_used')
+          .eq('client_id', session.client.client_id)
+          .single();
+
+        const newCount = (clientData?.trial_calls_used || 0) + 1;
+
+        await session.supabase
+          .from('voice_ai_clients')
+          .update({ trial_calls_used: newCount })
+          .eq('client_id', session.client.client_id);
+
+        console.log(`[Trial] Incremented trial_calls_used for client ${session.client.client_id} → ${newCount}`);
+      } else {
+        console.log(`[Trial] Incremented trial_calls_used for client ${session.client.client_id}`);
+      }
+    } catch (error) {
+      console.error('[Trial] Error incrementing trial_calls_used:', error);
+    }
+  }
+
+  // Track usage event in FlexPrice (for paid plans analytics - future)
+  await trackFlexPriceEvent(session.client.user_id, callSid, duration);
 }
 
 async function cleanupSession(callSid: string) {
@@ -851,4 +1023,293 @@ async function cleanupSession(callSid: string) {
   sessions.delete(callSid);
 
   console.log(`[Twilio] Session cleaned up: ${callSid}`);
+}
+
+// ============================================================================
+// LEAD CAPTURE FUNCTIONS
+// ============================================================================
+
+/**
+ * Extract lead information from conversation and save to database
+ */
+async function extractAndSaveLead(session: any) {
+  const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+  if (!GROQ_API_KEY) {
+    console.log('[Lead Capture] Groq API key not found, skipping lead extraction');
+    return;
+  }
+
+  try {
+    // Build conversation transcript for analysis
+    const transcript = session.conversationLog
+      .map((msg: any) => `${msg.speaker === 'user' ? 'Customer' : 'AI'}: ${msg.content}`)
+      .join('\n');
+
+    console.log('[Lead Capture] Analyzing conversation for lead information...');
+
+    // Use LLM to extract lead information
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a lead extraction assistant. Analyze the phone conversation and extract any customer contact information mentioned.
+
+Return ONLY a valid JSON object with these fields (use null if not found):
+{
+  "name": "customer name if mentioned",
+  "email": "email address if mentioned",
+  "phone": "phone number if mentioned (or caller's number if not explicitly stated)",
+  "notes": "brief notes about what they were interested in or needed"
+}
+
+If NO contact information was shared at all, return: {"name": null, "email": null, "phone": null, "notes": null}
+
+Examples:
+- "Hi, I'm John calling about plumbing" → {"name": "John", "email": null, "phone": null, "notes": "interested in plumbing"}
+- No info shared → {"name": null, "email": null, "phone": null, "notes": null}`
+          },
+          {
+            role: 'user',
+            content: `Extract lead information from this conversation:\n\n${transcript}`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 200
+      })
+    });
+
+    if (!response.ok) {
+      console.error('[Lead Capture] Groq API error:', response.status);
+      return;
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content?.trim();
+
+    if (!content) {
+      console.log('[Lead Capture] No content returned from LLM');
+      return;
+    }
+
+    // Parse JSON response
+    let leadData;
+    try {
+      leadData = JSON.parse(content);
+    } catch (e) {
+      console.error('[Lead Capture] Failed to parse LLM response:', content);
+      return;
+    }
+
+    // Use caller's phone if we have a name but no explicit phone
+    if (leadData.name && !leadData.phone && session.from) {
+      leadData.phone = session.from;
+    }
+
+    // Only save if we have at least some information
+    if (!leadData.name && !leadData.email && !leadData.phone) {
+      console.log('[Lead Capture] No contact information found in conversation');
+      return;
+    }
+
+    // Save to database
+    const { error } = await session.supabase
+      .from('leads')
+      .insert({
+        client_id: session.client.client_id,
+        name: leadData.name || null,
+        email: leadData.email || null,
+        phone: leadData.phone || null,
+        notes: leadData.notes || null,
+        source: 'phone',
+        session_id: session.callSid || null,
+        status: 'new'
+      });
+
+    if (error) {
+      console.error('[Lead Capture] Failed to save lead:', error);
+    } else {
+      console.log(`[Lead Capture] ✅ Lead saved: ${leadData.name || 'Unknown'} (${leadData.phone || 'no phone'})`);
+    }
+
+  } catch (error) {
+    console.error('[Lead Capture] Error during lead extraction:', error);
+  }
+}
+
+// ============================================================================
+// FLEXPRICE INTEGRATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Check user access combining trial + subscription logic
+ * Returns: { allowed: boolean, reason: string }
+ */
+async function checkUserAccess(client: any): Promise<{ allowed: boolean; reason: string }> {
+  try {
+    // 1. Check if user has active PAID subscription (FlexPrice - for future)
+    if (FLEXPRICE_API_KEY) {
+      const subscription = await getFlexPriceSubscription(client.user_id);
+      if (subscription?.status === 'active') {
+        console.log(`[Access] User has active subscription: ${subscription.plan_id || 'unknown plan'}`);
+        return { allowed: true, reason: 'active_subscription' };
+      }
+    }
+
+    // 2. No paid subscription → check TRIAL status (per-client credits in database)
+    console.log('[Access] No active subscription - checking trial status...');
+
+    // 2a. Check credits (from voice_ai_clients.credits - per-client, not per-user)
+    const credits = client.credits || 0;
+    if (credits < 1) {
+      console.log(`[Access] Trial credits exhausted (${credits} remaining)`);
+      return { allowed: false, reason: 'trial_expired_credits' };
+    }
+
+    // 2b. Check trial time limit (3 days from CLIENT creation)
+    const accountAge = Date.now() - new Date(client.created_at).getTime();
+    const daysSinceSignup = accountAge / (1000 * 60 * 60 * 24);
+
+    if (daysSinceSignup > 3) {
+      console.log(`[Access] Trial time expired (${Math.floor(daysSinceSignup)} days since client creation)`);
+      return { allowed: false, reason: 'trial_expired_time' };
+    }
+
+    // 3. Trial is still valid
+    const creditsUsed = 10 - credits;
+    console.log(`[Access] Trial active: ${creditsUsed}/10 credits used, ${Math.floor(3 - daysSinceSignup)} days remaining`);
+    return { allowed: true, reason: 'trial_active' };
+
+  } catch (error) {
+    console.error('[Access] Access check error:', error);
+    // Fail open on errors
+    return { allowed: true, reason: 'error_fail_open' };
+  }
+}
+
+/**
+ * Get user's active subscription from FlexPrice
+ * Returns subscription object or null
+ */
+async function getFlexPriceSubscription(userId: string): Promise<any> {
+  if (!FLEXPRICE_API_KEY) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(`${FLEXPRICE_BASE_URL}/subscriptions?external_customer_id=${userId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': FLEXPRICE_API_KEY,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('[FlexPrice] Subscription check failed:', response.status);
+      return null;
+    }
+
+    const data = await response.json();
+
+    // Find active subscription
+    if (data?.data && Array.isArray(data.data)) {
+      const activeSub = data.data.find((sub: any) => sub.status === 'active');
+      return activeSub || null;
+    }
+
+    return null;
+  } catch (error) {
+    console.error('[FlexPrice] Subscription check error:', error);
+    return null;
+  }
+}
+
+/**
+ * Check user's credit balance in FlexPrice
+ * Returns number of credits remaining (0 if error or no balance)
+ */
+async function checkFlexPriceBalance(userId: string): Promise<number> {
+  if (!FLEXPRICE_API_KEY) {
+    console.warn('[FlexPrice] API key not configured - skipping balance check');
+    return 999; // Fail open - allow call if FlexPrice not configured
+  }
+
+  try {
+    console.log(`[FlexPrice] Checking balance for user ${userId}...`);
+
+    const response = await fetch(`${FLEXPRICE_BASE_URL}/wallets?external_customer_id=${userId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': FLEXPRICE_API_KEY,
+      },
+    });
+
+    if (!response.ok) {
+      console.error('[FlexPrice] Balance check failed:', response.status, await response.text());
+      return 999; // Fail open on error
+    }
+
+    const data = await response.json();
+    const balance = data?.balance || 0;
+
+    console.log(`[FlexPrice] User ${userId} balance: ${balance} credits`);
+    return balance;
+  } catch (error) {
+    console.error('[FlexPrice] Balance check error:', error);
+    return 999; // Fail open on exception
+  }
+}
+
+/**
+ * Track voice_call event in FlexPrice after call ends
+ */
+async function trackFlexPriceEvent(userId: string, callSid: string, durationSeconds: number): Promise<boolean> {
+  if (!FLEXPRICE_API_KEY) {
+    console.warn('[FlexPrice] API key not configured - skipping event tracking');
+    return false;
+  }
+
+  try {
+    console.log(`[FlexPrice] Tracking voice_call event for user ${userId}...`);
+
+    const response = await fetch(`${FLEXPRICE_BASE_URL}/events`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': FLEXPRICE_API_KEY,
+      },
+      body: JSON.stringify({
+        event_name: 'voice_call',
+        external_customer_id: userId,
+        properties: {
+          call_sid: callSid,
+          duration_seconds: durationSeconds,
+          channel: 'phone'
+        },
+        timestamp: new Date().toISOString(),
+        source: 'twilio_voice_webhook'
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[FlexPrice] Event tracking failed:', response.status, errorText);
+      return false;
+    }
+
+    const data = await response.json();
+    console.log('[FlexPrice] ✅ voice_call event tracked:', data);
+    return true;
+  } catch (error) {
+    console.error('[FlexPrice] Event tracking error:', error);
+    return false;
+  }
 }

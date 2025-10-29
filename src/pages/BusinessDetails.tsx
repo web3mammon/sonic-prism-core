@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { BusinessHoursEditor, BusinessHours } from "@/components/BusinessHoursEditor";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -54,6 +55,10 @@ export default function BusinessDetails() {
     callTransferNumber: ""
   });
 
+  // Business hours and timezone state (stored in voice_ai_clients table)
+  const [businessHours, setBusinessHours] = useState<BusinessHours>({});
+  const [timezone, setTimezone] = useState<string>('America/New_York');
+
   // Initialize form data when profile and client data are available
   useEffect(() => {
     if (!loading && (profile || client) && !dataLoaded) {
@@ -71,6 +76,15 @@ export default function BusinessDetails() {
         serviceFee: (profile as any)?.service_fee || "",
         callTransferNumber: client?.call_transfer_number || ""
       });
+
+      // Load business hours and timezone from voice_ai_clients table
+      if (client?.business_hours) {
+        setBusinessHours(client.business_hours);
+      }
+      if (client?.timezone) {
+        setTimezone(client.timezone);
+      }
+
       setDataLoaded(true);
     }
   }, [loading, profile, client, dataLoaded]);
@@ -109,13 +123,15 @@ export default function BusinessDetails() {
         throw profileError;
       }
 
-      // Update voice_ai_clients with transfer number if client exists
+      // Update voice_ai_clients with transfer number AND business hours if client exists
       if (client) {
         const { error: clientError } = await supabase
           .from('voice_ai_clients')
           .update({
             call_transfer_number: formData.callTransferNumber || null,
             call_transfer_enabled: !!formData.callTransferNumber,
+            business_hours: businessHours, // JSONB
+            timezone: timezone,
             updated_at: new Date().toISOString()
           })
           .eq('client_id', client.client_id);
@@ -155,7 +171,25 @@ export default function BusinessDetails() {
       serviceFee: (profile as any)?.service_fee || "",
       callTransferNumber: client?.call_transfer_number || ""
     });
+
+    // Reset business hours and timezone
+    if (client?.business_hours) {
+      setBusinessHours(client.business_hours);
+    } else {
+      setBusinessHours({});
+    }
+    if (client?.timezone) {
+      setTimezone(client.timezone);
+    } else {
+      setTimezone('America/New_York');
+    }
+
     setIsEditing(false);
+  };
+
+  const handleBusinessHoursChange = (hours: BusinessHours, tz: string) => {
+    setBusinessHours(hours);
+    setTimezone(tz);
   };
 
   if (loading || !dataLoaded) {
@@ -408,27 +442,15 @@ export default function BusinessDetails() {
               <h2 className="text-2xl font-extralight">Operating Hours</h2>
             </div>
             <p className="text-muted-foreground text-sm">
-              When your business is available for service
+              Configure your business hours and timezone for AI intelligence
             </p>
           </div>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="businessHours">Business Hours <span className="text-muted-foreground font-normal">(Optional)</span></Label>
-              {isEditing ? (
-                <Textarea
-                  id="businessHours"
-                  value={formData.businessHours}
-                  onChange={(e) => handleInputChange("businessHours", e.target.value)}
-                  rows={4}
-                  placeholder="e.g. Mon-Fri: 8:00 AM - 6:00 PM, Sat: 9:00 AM - 4:00 PM, Sun: Closed"
-                />
-              ) : (
-                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[100px]">
-                  {formData.businessHours || "Not specified"}
-                </div>
-              )}
-            </div>
-          </div>
+          <BusinessHoursEditor
+            value={businessHours}
+            timezone={timezone}
+            onChange={handleBusinessHoursChange}
+            isEditing={isEditing}
+          />
         </motion.div>
 
         {/* Services & Pricing */}

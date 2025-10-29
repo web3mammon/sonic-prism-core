@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -11,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -138,6 +164,47 @@ export type Database = {
           },
         ]
       }
+      call_credits_ledger: {
+        Row: {
+          call_sid: string | null
+          created_at: string | null
+          credits_after: number | null
+          credits_before: number | null
+          credits_deducted: number | null
+          deduction_reason: string | null
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          call_sid?: string | null
+          created_at?: string | null
+          credits_after?: number | null
+          credits_before?: number | null
+          credits_deducted?: number | null
+          deduction_reason?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          call_sid?: string | null
+          created_at?: string | null
+          credits_after?: number | null
+          credits_before?: number | null
+          credits_deducted?: number | null
+          deduction_reason?: string | null
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_credits_ledger_call_sid_fkey"
+            columns: ["call_sid"]
+            isOneToOne: false
+            referencedRelation: "call_sessions"
+            referencedColumns: ["call_sid"]
+          },
+        ]
+      }
       call_sessions: {
         Row: {
           business_name: string | null
@@ -217,6 +284,86 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "fk_call_sessions_client_id"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "voice_ai_clients"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
+      chat_sessions: {
+        Row: {
+          chat_id: string
+          client_id: string
+          cost_amount: number | null
+          created_at: string | null
+          duration_seconds: number | null
+          end_time: string | null
+          id: string
+          intent: string | null
+          message_count: number | null
+          metadata: Json | null
+          outcome_type: string | null
+          sentiment_score: number | null
+          start_time: string
+          status: string
+          transcript: Json | null
+          transcript_summary: string | null
+          updated_at: string | null
+          visitor_email: string | null
+          visitor_id: string | null
+          visitor_metadata: Json | null
+          visitor_name: string | null
+        }
+        Insert: {
+          chat_id: string
+          client_id: string
+          cost_amount?: number | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          end_time?: string | null
+          id?: string
+          intent?: string | null
+          message_count?: number | null
+          metadata?: Json | null
+          outcome_type?: string | null
+          sentiment_score?: number | null
+          start_time?: string
+          status?: string
+          transcript?: Json | null
+          transcript_summary?: string | null
+          updated_at?: string | null
+          visitor_email?: string | null
+          visitor_id?: string | null
+          visitor_metadata?: Json | null
+          visitor_name?: string | null
+        }
+        Update: {
+          chat_id?: string
+          client_id?: string
+          cost_amount?: number | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          end_time?: string | null
+          id?: string
+          intent?: string | null
+          message_count?: number | null
+          metadata?: Json | null
+          outcome_type?: string | null
+          sentiment_score?: number | null
+          start_time?: string
+          status?: string
+          transcript?: Json | null
+          transcript_summary?: string | null
+          updated_at?: string | null
+          visitor_email?: string | null
+          visitor_id?: string | null
+          visitor_metadata?: Json | null
+          visitor_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_sessions_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "voice_ai_clients"
@@ -341,6 +488,51 @@ export type Database = {
           priority?: number | null
           prospect_name?: string | null
           status?: string | null
+        }
+        Relationships: []
+      }
+      payment_transactions: {
+        Row: {
+          amount: number
+          cashfree_order_id: string | null
+          cf_transaction_id: string | null
+          created_at: string | null
+          credits_added: number | null
+          currency: string | null
+          id: string
+          metadata: Json | null
+          payment_method: string | null
+          payment_status: string | null
+          transaction_type: string
+          user_id: string | null
+        }
+        Insert: {
+          amount: number
+          cashfree_order_id?: string | null
+          cf_transaction_id?: string | null
+          created_at?: string | null
+          credits_added?: number | null
+          currency?: string | null
+          id?: string
+          metadata?: Json | null
+          payment_method?: string | null
+          payment_status?: string | null
+          transaction_type: string
+          user_id?: string | null
+        }
+        Update: {
+          amount?: number
+          cashfree_order_id?: string | null
+          cf_transaction_id?: string | null
+          created_at?: string | null
+          credits_added?: number | null
+          currency?: string | null
+          id?: string
+          metadata?: Json | null
+          payment_method?: string | null
+          payment_status?: string | null
+          transaction_type?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -525,6 +717,60 @@ export type Database = {
           },
         ]
       }
+      subscriptions: {
+        Row: {
+          authorization_url: string | null
+          cf_plan_id: string | null
+          cf_subscription_id: string | null
+          created_at: string | null
+          id: string
+          included_calls: number | null
+          next_billing_date: string | null
+          plan_amount: number | null
+          plan_currency: string | null
+          status: string | null
+          subscription_end_date: string | null
+          subscription_id: string
+          subscription_start_date: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          authorization_url?: string | null
+          cf_plan_id?: string | null
+          cf_subscription_id?: string | null
+          created_at?: string | null
+          id?: string
+          included_calls?: number | null
+          next_billing_date?: string | null
+          plan_amount?: number | null
+          plan_currency?: string | null
+          status?: string | null
+          subscription_end_date?: string | null
+          subscription_id: string
+          subscription_start_date?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          authorization_url?: string | null
+          cf_plan_id?: string | null
+          cf_subscription_id?: string | null
+          created_at?: string | null
+          id?: string
+          included_calls?: number | null
+          next_billing_date?: string | null
+          plan_amount?: number | null
+          plan_currency?: string | null
+          status?: string | null
+          subscription_end_date?: string | null
+          subscription_id?: string
+          subscription_start_date?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       usage_logs: {
         Row: {
           amount: number
@@ -569,14 +815,17 @@ export type Database = {
           business_name: string
           call_transfer_enabled: boolean | null
           call_transfer_number: string | null
+          channel_type: Database["public"]["Enums"]["channel_type"]
           client_id: string
           client_slug: string | null
           config: Json
           conversation_config: Json | null
           created_at: string
+          credit_balance: number | null
           greeting_message: string | null
           id: string
           industry: string
+          intro_audio_file: string | null
           phone_number: string | null
           port: number
           region: string
@@ -602,14 +851,17 @@ export type Database = {
           business_name: string
           call_transfer_enabled?: boolean | null
           call_transfer_number?: string | null
+          channel_type?: Database["public"]["Enums"]["channel_type"]
           client_id: string
           client_slug?: string | null
           config?: Json
           conversation_config?: Json | null
           created_at?: string
+          credit_balance?: number | null
           greeting_message?: string | null
           id?: string
           industry: string
+          intro_audio_file?: string | null
           phone_number?: string | null
           port: number
           region: string
@@ -635,14 +887,17 @@ export type Database = {
           business_name?: string
           call_transfer_enabled?: boolean | null
           call_transfer_number?: string | null
+          channel_type?: Database["public"]["Enums"]["channel_type"]
           client_id?: string
           client_slug?: string | null
           config?: Json
           conversation_config?: Json | null
           created_at?: string
+          credit_balance?: number | null
           greeting_message?: string | null
           id?: string
           industry?: string
+          intro_audio_file?: string | null
           phone_number?: string | null
           port?: number
           region?: string
@@ -660,11 +915,108 @@ export type Database = {
         }
         Relationships: []
       }
+      widget_config: {
+        Row: {
+          allowed_domains: string[] | null
+          auto_open: boolean | null
+          auto_open_delay: number | null
+          border_radius: number | null
+          client_id: string
+          created_at: string | null
+          embed_code: string | null
+          enable_sound: boolean | null
+          greeting_message: string | null
+          id: string
+          logo_url: string | null
+          max_response_length: number | null
+          placeholder_text: string | null
+          position: string | null
+          primary_color: string | null
+          rate_limit: number | null
+          response_tone: string | null
+          secondary_color: string | null
+          show_branding: boolean | null
+          system_prompt: string | null
+          text_color: string | null
+          updated_at: string | null
+          widget_size: string | null
+          widget_url: string | null
+        }
+        Insert: {
+          allowed_domains?: string[] | null
+          auto_open?: boolean | null
+          auto_open_delay?: number | null
+          border_radius?: number | null
+          client_id: string
+          created_at?: string | null
+          embed_code?: string | null
+          enable_sound?: boolean | null
+          greeting_message?: string | null
+          id?: string
+          logo_url?: string | null
+          max_response_length?: number | null
+          placeholder_text?: string | null
+          position?: string | null
+          primary_color?: string | null
+          rate_limit?: number | null
+          response_tone?: string | null
+          secondary_color?: string | null
+          show_branding?: boolean | null
+          system_prompt?: string | null
+          text_color?: string | null
+          updated_at?: string | null
+          widget_size?: string | null
+          widget_url?: string | null
+        }
+        Update: {
+          allowed_domains?: string[] | null
+          auto_open?: boolean | null
+          auto_open_delay?: number | null
+          border_radius?: number | null
+          client_id?: string
+          created_at?: string | null
+          embed_code?: string | null
+          enable_sound?: boolean | null
+          greeting_message?: string | null
+          id?: string
+          logo_url?: string | null
+          max_response_length?: number | null
+          placeholder_text?: string | null
+          position?: string | null
+          primary_color?: string | null
+          rate_limit?: number | null
+          response_tone?: string | null
+          secondary_color?: string | null
+          show_branding?: boolean | null
+          system_prompt?: string | null
+          text_color?: string | null
+          updated_at?: string | null
+          widget_size?: string | null
+          widget_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "widget_config_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: true
+            referencedRelation: "voice_ai_clients"
+            referencedColumns: ["client_id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      add_credits: {
+        Args: { p_amount: number; p_user_id: string }
+        Returns: undefined
+      }
+      deduct_call_credit: {
+        Args: { p_call_sid: string; p_user_id: string }
+        Returns: boolean
+      }
       get_client_by_url_params: {
         Args: { p_clientname: string; p_industry: string; p_region: string }
         Returns: {
@@ -686,13 +1038,10 @@ export type Database = {
         Returns: Json
       }
       get_current_user_role: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: Database["public"]["Enums"]["app_role"]
       }
-      get_next_available_port: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      get_next_available_port: { Args: never; Returns: number }
       has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: boolean
@@ -700,6 +1049,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "team_member" | "client"
+      channel_type: "phone" | "website" | "both"
       intent:
         | "Emergency Service"
         | "Appointment Booking"
@@ -832,9 +1182,13 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "team_member", "client"],
+      channel_type: ["phone", "website", "both"],
       intent: [
         "Emergency Service",
         "Appointment Booking",

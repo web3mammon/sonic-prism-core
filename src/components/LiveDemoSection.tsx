@@ -41,12 +41,11 @@ export function LiveDemoSection() {
       return;
     }
 
-    // Check if client has intro audio file configured
-    // Expected format: {client_id}_intro.ulaw (e.g., au_plmb_jamesonplumbing_001_intro.ulaw)
-    if (!client?.intro_audio_file) {
+    // Check if client exists
+    if (!client?.client_id) {
       toast({
-        title: "No intro audio configured",
-        description: "Intro audio will be generated automatically during client provisioning. For now, use 'Test Call' button to hear the live AI.",
+        title: "No client loaded",
+        description: "Please wait for client data to load.",
       });
       return;
     }
@@ -54,10 +53,10 @@ export function LiveDemoSection() {
     try {
       setIsPlaying(true);
 
-      // Construct Supabase storage URL
-      // Bucket: audio-snippets, File: {client_id}_intro.ulaw
+      // Construct Supabase storage URL using naming convention
+      // Format: {client_id}_intro.mp3 (for web playback)
       const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-      const audioUrl = `${SUPABASE_URL}/storage/v1/object/public/audio-snippets/${client.intro_audio_file}`;
+      const audioUrl = `${SUPABASE_URL}/storage/v1/object/public/audio-snippets/${client.client_id}_intro.mp3`;
 
       console.log('[LiveDemo] Attempting to play audio:', audioUrl);
 

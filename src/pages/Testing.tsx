@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Play, Phone, Square, Volume2, Download, Loader2, TestTube2 } from "lucide-react";
-import { useClientAPI } from "@/hooks/useClientAPI";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -31,7 +30,6 @@ export default function Testing() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-  const { client: apiClient } = useClientAPI();
   const { client: currentClient } = useCurrentClient();
   const { profile } = useAuth();
 

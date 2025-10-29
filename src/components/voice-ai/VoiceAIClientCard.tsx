@@ -11,7 +11,6 @@ interface VoiceAIClient {
   region: string;
   industry: string;
   business_name: string;
-  port: number;
   status: 'active' | 'inactive' | 'starting' | 'stopping' | 'error';
   phone_number?: string;
   config: any;
@@ -116,11 +115,7 @@ export const VoiceAIClientCard: React.FC<VoiceAIClientCardProps> = ({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Port:</span>
-            <p className="font-mono">{client.port}</p>
-          </div>
+        <div className="grid grid-cols-1 gap-4 text-sm">
           <div>
             <span className="text-muted-foreground">Phone:</span>
             <p className="font-mono">{client.phone_number || 'Not assigned'}</p>

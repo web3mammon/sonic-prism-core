@@ -6,12 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// FlexPrice API configuration
+const FLEXPRICE_API_KEY = Deno.env.get('FLEXPRICE_API_KEY');
+const FLEXPRICE_BASE_URL = Deno.env.get('FLEXPRICE_BASE_URL') || 'https://api.cloud.flexprice.io/v1';
+
 interface ClientProvisioningRequest {
   business_name: string;
   region: 'AU' | 'US' | 'UK';
   industry: string;
-  phone_number: string;
+  phone_number?: string; // Optional: Required for phone channel, optional for website-only
   user_id: string; // Required: The UUID of the user creating this client
+  channel_type?: 'phone' | 'website' | 'both'; // Default: 'phone'
   greeting_text?: string;
   system_prompt?: string;
   voice_id?: string;
@@ -37,10 +42,10 @@ serve(async (req) => {
     const requestData: ClientProvisioningRequest = await req.json();
     console.log('[ClientProvisioning] Request:', requestData);
 
-    // Validate required fields
-    if (!requestData.business_name || !requestData.region || !requestData.industry || !requestData.phone_number || !requestData.user_id) {
+    // Validate required fields (phone_number optional for website-only clients)
+    if (!requestData.business_name || !requestData.region || !requestData.industry || !requestData.user_id) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields: business_name, region, industry, phone_number, user_id' }),
+        JSON.stringify({ error: 'Missing required fields: business_name, region, industry, user_id' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -75,84 +80,80 @@ serve(async (req) => {
       requestData.business_name
     );
 
-    // Step 5: Generate intro audio with ElevenLabs
+    // Step 5: Generate intro audio with ElevenLabs (BOTH formats)
     console.log('[ClientProvisioning] Generating intro audio with ElevenLabs...');
-    const audioFileName = `${client_id}_intro.ulaw`;
-    const audioBuffer = await generateIntroAudio(greeting_text, voice_id);
+    const audioFileName_ulaw = `${client_id}_intro.ulaw`;
+    const audioFileName_mp3 = `${client_id}_intro.mp3`;
 
-    if (!audioBuffer) {
-      throw new Error('Failed to generate intro audio');
+    // Generate μ-law for phone calls
+    const audioBuffer_ulaw = await generateIntroAudio(greeting_text, voice_id, 'ulaw_8000');
+    if (!audioBuffer_ulaw) {
+      throw new Error('Failed to generate ulaw intro audio');
     }
+    console.log(`[ClientProvisioning] Generated ulaw audio: ${audioBuffer_ulaw.byteLength} bytes`);
 
-    console.log(`[ClientProvisioning] Generated audio: ${audioBuffer.byteLength} bytes`);
+    // Generate MP3 for website widget
+    const audioBuffer_mp3 = await generateIntroAudio(greeting_text, voice_id, 'mp3_44100');
+    if (!audioBuffer_mp3) {
+      throw new Error('Failed to generate mp3 intro audio');
+    }
+    console.log(`[ClientProvisioning] Generated mp3 audio: ${audioBuffer_mp3.byteLength} bytes`);
 
-    // Step 6: Upload to Supabase Storage
-    console.log('[ClientProvisioning] Uploading to Supabase Storage...');
+    // Step 6: Upload BOTH to Supabase Storage
+    console.log('[ClientProvisioning] Uploading audio files to Supabase Storage...');
+
+    // Upload ulaw (phone)
     const { data: uploadData, error: uploadError } = await supabaseClient.storage
       .from('audio-snippets')
-      .upload(audioFileName, audioBuffer, {
+      .upload(audioFileName_ulaw, audioBuffer_ulaw, {
         contentType: 'audio/basic',
         upsert: true,
       });
 
     if (uploadError) {
-      console.error('[ClientProvisioning] Upload error:', uploadError);
+      console.error('[ClientProvisioning] Upload error (ulaw):', uploadError);
       throw new Error(`Storage upload failed: ${uploadError.message}`);
     }
+    console.log('[ClientProvisioning] ✅ Ulaw audio uploaded:', uploadData);
 
-    console.log('[ClientProvisioning] Upload successful:', uploadData);
+    // Upload mp3 (website)
+    const { data: uploadData_mp3, error: uploadError_mp3 } = await supabaseClient.storage
+      .from('audio-snippets')
+      .upload(audioFileName_mp3, audioBuffer_mp3, {
+        contentType: 'audio/mpeg',
+        upsert: true,
+      });
+
+    if (uploadError_mp3) {
+      console.error('[ClientProvisioning] Upload error (mp3):', uploadError_mp3);
+      throw new Error(`MP3 storage upload failed: ${uploadError_mp3.message}`);
+    }
+    console.log('[ClientProvisioning] ✅ MP3 audio uploaded:', uploadData_mp3);
 
     // Step 7: Insert into voice_ai_clients table
     console.log('[ClientProvisioning] Creating voice_ai_clients record...');
 
-    // Generate complete config (no port/api_proxy_path needed with Edge Functions!)
-    const config = {
-      voice_id: voice_id,
-      system_prompt: system_prompt,
-      greeting_message: greeting_text,
-      business_context: {
-        name: requestData.business_name,
-        region: requestData.region,
-        industry: requestData.industry,
-        client_slug: client_slug
-      },
-      active_hours: {
-        enabled: true,
-        timezone: requestData.region === 'AU' ? 'Australia/Sydney' : requestData.region === 'UK' ? 'Europe/London' : 'America/New_York',
-        hours: {
-          monday: { open: '07:00', close: '17:00' },
-          tuesday: { open: '07:00', close: '17:00' },
-          wednesday: { open: '07:00', close: '17:00' },
-          thursday: { open: '07:00', close: '17:00' },
-          friday: { open: '07:00', close: '17:00' },
-          saturday: { open: '08:00', close: '12:00' },
-          sunday: { closed: true }
-        }
-      },
-      conversation_config: {
-        model: 'gpt-4o-mini',
-        max_tokens: 150,
-        temperature: 0.7,
-        enable_recording: true,
-        enable_transcription: true
-      },
-      tts_config: {
-        provider: 'elevenlabs',
-        model: 'eleven_turbo_v2_5',
-        stability: 0.5,
-        similarity_boost: 0.75
-      },
-      stt_config: {
-        provider: 'deepgram',
-        model: 'nova-2',
-        language: requestData.region === 'AU' ? 'en-AU' : requestData.region === 'UK' ? 'en-GB' : 'en-US'
-      },
-      call_transfer_enabled: false,
-      transfer_threshold: -0.5,
-      audio_snippets: {}
+    const channel_type = requestData.channel_type || 'phone';
+
+    // Calculate timezone based on region
+    const timezone = requestData.region === 'AU' ? 'Australia/Sydney'
+                   : requestData.region === 'UK' ? 'Europe/London'
+                   : requestData.region === 'CA' ? 'America/Toronto'
+                   : requestData.region === 'IN' ? 'Asia/Kolkata'
+                   : 'America/New_York';
+
+    // Default business hours (can be customized later in Business Details page)
+    const business_hours = {
+      monday: { open: '09:00', close: '17:00' },
+      tuesday: { open: '09:00', close: '17:00' },
+      wednesday: { open: '09:00', close: '17:00' },
+      thursday: { open: '09:00', close: '17:00' },
+      friday: { open: '09:00', close: '17:00' },
+      saturday: { open: '10:00', close: '14:00' },
+      sunday: { closed: true }
     };
 
-    const { data: clientData, error: clientError } = await supabaseClient
+    const { data: clientData, error: clientError} = await supabaseClient
       .from('voice_ai_clients')
       .insert({
         client_id: client_id,
@@ -165,9 +166,12 @@ serve(async (req) => {
         voice_id: voice_id,
         greeting_message: greeting_text,
         system_prompt: system_prompt,
-        intro_audio_file: audioFileName,
-        config: config,
+        timezone: timezone,
+        business_hours: business_hours,
+        channel_type: channel_type,
         status: 'active',
+        // trial_calls and trial_conversations automatically set by DB trigger based on channel_type
+        // phone: 10 calls, 0 conversations | website: 0 calls, 10 conversations | both: 10 calls, 10 conversations
         created_at: new Date().toISOString(),
       })
       .select()
@@ -180,43 +184,143 @@ serve(async (req) => {
 
     console.log('[ClientProvisioning] Client created:', clientData);
 
-    // Step 8: Insert into audio_files table
-    console.log('[ClientProvisioning] Creating audio_files record...');
-    const { data: audioFileData, error: audioFileError } = await supabaseClient
+    // Step 8: FlexPrice Integration - Create customer and wallet
+    console.log('[ClientProvisioning] Creating FlexPrice customer and wallet...');
+
+    // Get user email from Supabase Auth
+    const { data: userData, error: userError } = await supabaseClient.auth.admin.getUserById(requestData.user_id);
+    const userEmail = userData?.user?.email || `${requestData.user_id}@klariqo.com`; // Fallback email
+
+    if (userError) {
+      console.warn('[ClientProvisioning] Could not fetch user email:', userError.message);
+    }
+
+    // Create FlexPrice customer (per-client, not per-user)
+    // This ensures each business has separate billing
+    const customerCreated = await createFlexPriceCustomer(
+      client_id,  // Use client_id instead of user_id for per-business billing
+      userEmail,
+      requestData.business_name
+    );
+
+    if (customerCreated) {
+      // Create wallet with 10 free trial credits (per-client wallet)
+      await createFlexPriceWallet(client_id, 10);  // Use client_id for per-business credits
+    } else {
+      console.warn('[ClientProvisioning] ⚠️ FlexPrice customer creation failed - continuing anyway');
+      // Non-fatal - client is already created, we can retry later
+    }
+
+    // Step 9: Insert into audio_files table (both formats)
+    console.log('[ClientProvisioning] Creating audio_files records...');
+
+    // Insert ulaw record
+    const { data: audioFileData_ulaw, error: audioFileError_ulaw } = await supabaseClient
       .from('audio_files')
       .insert({
         client_id: client_id,
-        file_name: audioFileName,
-        file_path: `audio-snippets/${audioFileName}`,
+        file_name: audioFileName_ulaw,
+        file_path: `audio-snippets/${audioFileName_ulaw}`,
         file_type: 'intro',
         audio_format: 'ulaw',
         sample_rate: 8000,
-        duration_ms: Math.round((audioBuffer.byteLength / 8000) * 1000), // Approximate duration
-        file_size_bytes: audioBuffer.byteLength,
+        duration_ms: Math.round((audioBuffer_ulaw.byteLength / 8000) * 1000),
+        file_size_bytes: audioBuffer_ulaw.byteLength,
         created_at: new Date().toISOString(),
       })
       .select()
       .single();
 
-    if (audioFileError) {
-      console.error('[ClientProvisioning] Audio file insert error:', audioFileError);
-      // Non-fatal - client is already created
+    if (audioFileError_ulaw) {
+      console.error('[ClientProvisioning] Audio file insert error (ulaw):', audioFileError_ulaw);
+    } else {
+      console.log('[ClientProvisioning] Ulaw audio file record created:', audioFileData_ulaw);
     }
 
-    console.log('[ClientProvisioning] Audio file record created:', audioFileData);
+    // Insert mp3 record
+    const { data: audioFileData_mp3, error: audioFileError_mp3 } = await supabaseClient
+      .from('audio_files')
+      .insert({
+        client_id: client_id,
+        file_name: audioFileName_mp3,
+        file_path: `audio-snippets/${audioFileName_mp3}`,
+        file_type: 'intro',
+        audio_format: 'mp3',
+        sample_rate: 44100,
+        duration_ms: Math.round((audioBuffer_mp3.byteLength / 176400) * 1000), // 44100 * 4 bytes/sample
+        file_size_bytes: audioBuffer_mp3.byteLength,
+        created_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (audioFileError_mp3) {
+      console.error('[ClientProvisioning] Audio file insert error (mp3):', audioFileError_mp3);
+    } else {
+      console.log('[ClientProvisioning] MP3 audio file record created:', audioFileData_mp3);
+    }
+
+    // Step 9: Create widget_config if channel_type is 'website' or 'both'
+    let embed_code = null;
+    if (channel_type === 'website' || channel_type === 'both') {
+      console.log('[ClientProvisioning] Creating widget_config for website channel...');
+
+      // Generate embed code
+      const widget_url = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/widgets/klariqo-widget.js`;
+      embed_code = `<script src="${widget_url}?client_id=${client_id}"></script>`;
+
+      // Generate MP3 audio URL for widget
+      const mp3_audio_url = `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/audio-snippets/${audioFileName_mp3}`;
+
+      const { data: widgetData, error: widgetError } = await supabaseClient
+        .from('widget_config')
+        .insert({
+          client_id: client_id,
+          primary_color: '#ef4444',
+          secondary_color: '#1a1a1a',
+          text_color: '#ffffff',
+          position: 'bottom-right',
+          widget_size: 'medium',
+          greeting_message: greeting_text,
+          greeting_audio_url: mp3_audio_url,  // Pre-generated MP3 intro
+          system_prompt: system_prompt,
+          embed_code: embed_code,
+          widget_url: widget_url,
+        })
+        .select()
+        .single();
+
+      if (widgetError) {
+        console.error('[ClientProvisioning] Widget config insert error:', widgetError);
+        // Non-fatal - client is already created
+      } else {
+        console.log('[ClientProvisioning] Widget config created:', widgetData);
+      }
+    }
 
     // Success response
+    const responseData: any = {
+      success: true,
+      client_id: client_id,
+      client_slug: client_slug,
+      channel_type: channel_type,
+      business_name: requestData.business_name,
+      phone_number: requestData.phone_number,
+      voice_id: voice_id,
+      intro_audio_file_ulaw: audioFileName_ulaw,
+      intro_audio_file_mp3: audioFileName_mp3,
+      audio_url_ulaw: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/audio-snippets/${audioFileName_ulaw}`,
+      audio_url_mp3: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/audio-snippets/${audioFileName_mp3}`,
+      message: 'Client provisioned successfully',
+    };
+
+    // Add embed_code to response if widget was created
+    if (embed_code) {
+      responseData.embed_code = embed_code;
+    }
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        client_id: client_id,
-        business_name: requestData.business_name,
-        phone_number: requestData.phone_number,
-        voice_id: voice_id,
-        intro_audio_file: audioFileName,
-        audio_url: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/audio-snippets/${audioFileName}`,
-        message: 'Client provisioned successfully',
-      }),
+      JSON.stringify(responseData),
       {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -255,20 +359,69 @@ function generateClientId(region: string, industry: string, businessName: string
 // Helper: Map industry to 4-letter code
 function getIndustryCode(industry: string): string {
   const industryMap: { [key: string]: string } = {
+    // Physical/Local Services
     'plumbing': 'plmb',
     'hvac': 'hvac',
     'electrical': 'elec',
+    'electrician': 'elec',
     'landscaping': 'land',
+    'lawn': 'land',
     'cleaning': 'clen',
     'roofing': 'roof',
     'painting': 'pant',
     'carpentry': 'carp',
     'pest_control': 'pest',
+    'pest': 'pest',
     'locksmith': 'lock',
+    'handyman': 'hand',
+
+    // Online Businesses
+    'saas': 'saas',
+    'software': 'saas',
+    'software_as_a_service': 'saas',
+    'ecommerce': 'ecom',
+    'e-commerce': 'ecom',
+    'e_commerce': 'ecom',
+    'online_store': 'ecom',
+    'online_shop': 'ecom',
+    'blog': 'blog',
+    'blogging': 'blog',
+    'content': 'blog',
+    'consulting': 'cons',
+    'consultant': 'cons',
+    'consultancy': 'cons',
+    'marketing': 'mark',
+    'marketing_agency': 'mark',
+    'agency': 'mark',
+    'design': 'desi',
+    'design_agency': 'desi',
+    'creative': 'desi',
+    'creative_agency': 'desi',
+
+    // Professional Services
+    'healthcare': 'hlth',
+    'health': 'hlth',
+    'medical': 'hlth',
+    'dental': 'hlth',
+    'dentist': 'hlth',
+    'real_estate': 'real',
+    'realestate': 'real',
+    'property': 'real',
+    'legal': 'legl',
+    'law': 'legl',
+    'lawyer': 'legl',
+    'attorney': 'legl',
+
+    // Food & Hospitality
+    'restaurant': 'rest',
+    'food': 'rest',
+    'cafe': 'cafe',
+    'coffee': 'cafe',
+    'bar': 'rest',
   };
 
-  const normalized = industry.toLowerCase().replace(/\s+/g, '_');
-  return industryMap[normalized] || 'gnrl'; // Default to 'gnrl' for general
+  const normalized = industry.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+  return industryMap[normalized] || 'misc'; // Default to 'misc' for miscellaneous
 }
 
 // Helper: Get default voice_id based on region
@@ -277,6 +430,7 @@ function getDefaultVoiceId(region: string): string {
     'AU': 'G83AhxHK8kccx46W4Tcd', // Male Australian voice
     'US': 'pNInz6obpgDQGcFmaJgB', // Male US voice (Adam)
     'UK': 'ThT5KcBeYPX3keUQqHPh', // Male UK voice (Antoni)
+    'CA': 'pNInz6obpgDQGcFmaJgB', // Male Canadian voice (same as US - Adam)
   };
 
   return voiceMap[region] || voiceMap['US']; // Default to US voice
@@ -331,7 +485,7 @@ Keep responses natural, concise, and helpful.`,
 }
 
 // Helper: Generate intro audio using ElevenLabs streaming API
-async function generateIntroAudio(text: string, voiceId: string): Promise<ArrayBuffer | null> {
+async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8000' | 'mp3_44100'): Promise<ArrayBuffer | null> {
   const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
   if (!ELEVENLABS_API_KEY) {
@@ -342,17 +496,20 @@ async function generateIntroAudio(text: string, voiceId: string): Promise<ArrayB
   try {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`;
 
+    // Determine content type based on format
+    const acceptHeader = format === 'ulaw_8000' ? 'audio/basic' : 'audio/mpeg';
+
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        'Accept': 'audio/basic',
+        'Accept': acceptHeader,
         'Content-Type': 'application/json',
         'xi-api-key': ELEVENLABS_API_KEY,
       },
       body: JSON.stringify({
         text: text,
         model_id: 'eleven_turbo_v2_5',
-        output_format: 'ulaw_8000', // Direct μ-law output for Twilio
+        output_format: format, // Dynamic: 'ulaw_8000' for phone, 'mp3_44100' for web
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -362,17 +519,106 @@ async function generateIntroAudio(text: string, voiceId: string): Promise<ArrayB
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('[ElevenLabs] Error response:', response.status, errorText);
+      console.error(`[ElevenLabs] Error response (${format}):`, response.status, errorText);
       return null;
     }
 
     const audioBuffer = await response.arrayBuffer();
-    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of μ-law audio`);
+    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${format} audio`);
 
     return audioBuffer;
 
   } catch (error) {
-    console.error('[ElevenLabs] Error generating audio:', error);
+    console.error(`[ElevenLabs] Error generating ${format} audio:`, error);
     return null;
+  }
+}
+
+// ============================================================================
+// FLEXPRICE INTEGRATION FUNCTIONS
+// ============================================================================
+
+/**
+ * Create a customer in FlexPrice
+ */
+async function createFlexPriceCustomer(userId: string, email: string, businessName: string): Promise<boolean> {
+  if (!FLEXPRICE_API_KEY) {
+    console.error('[FlexPrice] API key not configured');
+    return false;
+  }
+
+  try {
+    console.log(`[FlexPrice] Creating customer for user ${userId}...`);
+
+    const response = await fetch(`${FLEXPRICE_BASE_URL}/customers`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': FLEXPRICE_API_KEY,
+      },
+      body: JSON.stringify({
+        external_customer_id: userId,
+        name: businessName,
+        email: email,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[FlexPrice] Customer creation failed:', response.status, errorText);
+      return false;
+    }
+
+    const data = await response.json();
+    console.log('[FlexPrice] ✅ Customer created:', data);
+    return true;
+  } catch (error) {
+    console.error('[FlexPrice] Customer creation error:', error);
+    return false;
+  }
+}
+
+/**
+ * Create a wallet and grant initial free trial credits
+ * @param clientId - The client_id (business identifier) to create wallet for
+ * @param initialCredits - Initial credit balance (default: 10)
+ *
+ * NOTE: We use client_id as external_customer_id to ensure per-business billing.
+ * This way each business (client) has its own isolated credit pool.
+ */
+async function createFlexPriceWallet(clientId: string, initialCredits: number = 10): Promise<boolean> {
+  if (!FLEXPRICE_API_KEY) {
+    console.error('[FlexPrice] API key not configured');
+    return false;
+  }
+
+  try {
+    console.log(`[FlexPrice] Creating wallet with ${initialCredits} free trial credits for client ${clientId}...`);
+
+    const response = await fetch(`${FLEXPRICE_BASE_URL}/wallets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': FLEXPRICE_API_KEY,
+      },
+      body: JSON.stringify({
+        external_customer_id: clientId,  // Use client_id for per-business wallets
+        currency: 'USD',
+        initial_balance: initialCredits,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[FlexPrice] Wallet creation failed:', response.status, errorText);
+      return false;
+    }
+
+    const data = await response.json();
+    console.log(`[FlexPrice] ✅ Wallet created with ${initialCredits} free trial credits for client ${clientId}:`, data);
+    return true;
+  } catch (error) {
+    console.error('[FlexPrice] Wallet creation error:', error);
+    return false;
   }
 }

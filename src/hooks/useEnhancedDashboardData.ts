@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { getCurrencyByRegion } from '@/lib/currency';
 
 interface EnhancedDashboardData {
   // Sentiment
@@ -154,43 +153,8 @@ export function useEnhancedDashboardData(clientId: string | null, region: string
         ? callsWithDuration.reduce((sum, c) => sum + (c.duration_seconds || 0), 0) / callsWithDuration.length / 60
         : null;
 
-      // Fetch user_id from voice_ai_clients to get credits data
-      const { data: clientData } = await supabase
-        .from('voice_ai_clients')
-        .select('user_id')
-        .eq('client_id', clientId)
-        .single();
-
-      let callsRemaining = null;
-      let creditBalance = null;
-
-      if (clientData?.user_id) {
-        const { data: creditsData } = await supabase
-          .from('credits')
-          .select('balance, calls_included, currency')
-          .eq('user_id', clientData.user_id)
-          .single();
-
-        // Get the correct currency for this region
-        const currencyInfo = getCurrencyByRegion(region);
-
-        // Fetch pricing config filtered by the correct currency
-        const { data: pricingConfig } = await supabase
-          .from('pricing_config')
-          .select('per_call_price, currency')
-          .eq('currency', currencyInfo.code)
-          .single();
-
-        // Fallback: $2 USD converted to local currency if no pricing config
-        const costPerCall = pricingConfig?.per_call_price || 2.00;
-
-        if (creditsData) {
-          creditBalance = creditsData.balance;
-          // Calculate calls remaining: balance / cost per call
-          // Both are now guaranteed to be in the same currency
-          callsRemaining = creditBalance > 0 ? Math.floor(creditBalance / costPerCall) : 0;
-        }
-      }
+      // NOTE: Trial credits are fetched from useCurrentClient hook, not here
+      // This hook should only focus on analytics from call_sessions
 
       setData({
         avgSentiment,
@@ -208,8 +172,8 @@ export function useEnhancedDashboardData(clientId: string | null, region: string
         callsChangePercent,
         callsThisMonth: calls.length,
         avgCallDuration,
-        callsRemaining,
-        creditBalance,
+        callsRemaining: null, // Deprecated: Use client.trial_* fields instead
+        creditBalance: null, // Deprecated: Use client.trial_* fields instead
       });
     } catch (err) {
       console.error('Error fetching enhanced dashboard data:', err);

@@ -16,28 +16,9 @@ export const RoleBasedRedirect = ({ children }: RoleBasedRedirectProps) => {
 
     const currentPath = location.pathname;
     const isRootPath = currentPath === '/';
-    const isTenantPath = /^\/[a-z]{2}\/[a-z]{3,4}\/[a-zA-Z0-9-]+/.test(currentPath);
-    const isBusinessSetupPath = currentPath === '/business-setup';
-    
-    // Check if user needs to complete onboarding
-    const extendedProfile = profile as any;
-    if (!extendedProfile?.onboarding_completed && !isBusinessSetupPath) {
-      navigate('/business-setup', { replace: true });
-      return;
-    }
 
-    // If user has completed onboarding but is on business setup page, redirect them
-    if (extendedProfile?.onboarding_completed && isBusinessSetupPath) {
-      if (hasRole('client')) {
-        navigate('/au/plmb/acmeplumbing', { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
-      return;
-    }
-
-    // If user is a client (not admin/team_member) and onboarding is complete
-    if (hasRole('client') && extendedProfile?.onboarding_completed) {
+    // If user is a client (not admin/team_member)
+    if (hasRole('client')) {
       // Clients should only access their tenant dashboard, not Central HQ
       if (isRootPath) {
         // For now, redirect to a demo tenant path (in production, this would come from user's profile)

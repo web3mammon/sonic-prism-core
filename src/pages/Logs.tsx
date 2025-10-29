@@ -51,6 +51,15 @@ export default function Logs() {
 
   const { client } = useCurrentClient();
 
+  // Get channel type for dynamic labels
+  const channelType = client?.channel_type || 'phone';
+
+  // Dynamic labels based on channel type
+  const conversationLabel = channelType === 'both' ? 'Conversations' :
+                           channelType === 'phone' ? 'Calls' : 'Chats';
+  const conversationLabelSingular = channelType === 'both' ? 'Conversation' :
+                                   channelType === 'phone' ? 'Call' : 'Chat';
+
   useEffect(() => {
     if (client?.client_id) {
       fetchLogs();
@@ -124,7 +133,7 @@ export default function Logs() {
         transition={{ duration: 0.4 }}
         className="space-y-2"
       >
-        <h1 className="text-5xl font-extralight mb-2">Call Conversation Logs</h1>
+        <h1 className="text-5xl font-extralight mb-2">{conversationLabel} Conversation Logs</h1>
         <p className="text-muted-foreground">
           View detailed conversation transcripts and interactions
         </p>
@@ -139,10 +148,10 @@ export default function Logs() {
       >
         <div className="rounded-xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6">
             <div className="flex items-center space-x-3">
-              <Phone className="h-5 w-5 text-blue-500" />
+              {channelType === 'phone' ? <Phone className="h-5 w-5 text-blue-500" /> : <MessageSquare className="h-5 w-5 text-blue-500" />}
               <div>
                 <p className="text-5xl font-extralight">{uniqueCallSids.length}</p>
-                <p className="text-sm text-muted-foreground mt-2">Total Calls</p>
+                <p className="text-sm text-muted-foreground mt-2">Total {conversationLabel}</p>
               </div>
             </div>
         </div>
@@ -188,7 +197,7 @@ export default function Logs() {
         <div className="space-y-2">
           <h2 className="text-2xl font-extralight">Conversation Logs</h2>
           <p className="text-muted-foreground">
-            Real-time conversation transcripts from your Voice AI calls
+            Real-time conversation transcripts from your Voice AI {conversationLabel.toLowerCase()}
           </p>
         </div>
         <div>
@@ -213,16 +222,16 @@ export default function Logs() {
                 <SelectItem value="assistant">AI Only</SelectItem>
               </SelectContent>
             </Select>
-            <Select 
-              value={selectedCallSid || "all"} 
+            <Select
+              value={selectedCallSid || "all"}
               onValueChange={(val) => setSelectedCallSid(val === "all" ? null : val)}
             >
               <SelectTrigger className="w-64">
-                <Phone className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Filter by call" />
+                {channelType === 'phone' ? <Phone className="mr-2 h-4 w-4" /> : <MessageSquare className="mr-2 h-4 w-4" />}
+                <SelectValue placeholder={`Filter by ${conversationLabelSingular.toLowerCase()}`} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Calls</SelectItem>
+                <SelectItem value="all">All {conversationLabel}</SelectItem>
                 {uniqueCallSids.slice(0, 10).map(callSid => (
                   <SelectItem key={callSid} value={callSid}>
                     {callSid.substring(0, 20)}...

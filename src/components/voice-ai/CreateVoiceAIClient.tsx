@@ -55,17 +55,6 @@ export const CreateVoiceAIClient: React.FC<CreateVoiceAIClientProps> = ({
       .substring(0, 12);
   };
 
-  const getNextPort = async () => {
-    try {
-      const { data, error } = await supabase.rpc('get_next_available_port');
-      if (error) throw error;
-      return data;
-    } catch (error) {
-      console.error('Error getting next port:', error);
-      return 3001; // Default fallback
-    }
-  };
-
   const onSubmit = async (data: CreateClientForm) => {
     if (!user) {
       toast({
@@ -77,10 +66,9 @@ export const CreateVoiceAIClient: React.FC<CreateVoiceAIClientProps> = ({
     }
 
     setLoading(true);
-    
+
     try {
       const clientId = generateClientId(data.business_name);
-      const nextPort = await getNextPort();
 
       const clientConfig = {
         system_prompt: data.system_prompt,
@@ -94,7 +82,7 @@ export const CreateVoiceAIClient: React.FC<CreateVoiceAIClientProps> = ({
         }
       };
 
-      const { error } = await supabase
+      const { error} = await supabase
         .from('voice_ai_clients')
         .insert({
           user_id: user.id,
@@ -102,7 +90,7 @@ export const CreateVoiceAIClient: React.FC<CreateVoiceAIClientProps> = ({
           region: data.region,
           industry: data.industry,
           business_name: data.business_name,
-          port: nextPort,
+          channel_type: 'phone', // Default to phone (will get 10 trial_calls via DB trigger)
           status: 'inactive',
           config: clientConfig
         });
@@ -111,7 +99,7 @@ export const CreateVoiceAIClient: React.FC<CreateVoiceAIClientProps> = ({
 
       toast({
         title: "Success",
-        description: `Voice AI client created successfully on port ${nextPort}`
+        description: `Voice AI client created successfully with 10 free trial calls`
       });
 
       form.reset();

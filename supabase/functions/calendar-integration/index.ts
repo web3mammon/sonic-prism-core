@@ -30,17 +30,15 @@ serve(async (req) => {
       throw new Error('Client not found');
     }
 
-    const calendarConfig = client.config?.calendar_integration || {};
-
     switch (action) {
       case 'get_available_slots':
-        return await getAvailableSlots(params, calendarConfig);
-      
+        return await getAvailableSlots(params, client);
+
       case 'check_availability':
-        return await checkAvailability(params, calendarConfig);
-      
+        return await checkAvailability(params, client);
+
       case 'create_booking':
-        return await createBooking(params, client_id, calendarConfig, supabaseClient);
+        return await createBooking(params, client_id, client, supabaseClient);
       
       case 'request_approval':
         return await requestBookingApproval(params, client_id, supabaseClient);
@@ -63,11 +61,11 @@ serve(async (req) => {
   }
 });
 
-async function getAvailableSlots(params: any, config: any) {
+async function getAvailableSlots(params: any, client: any) {
   const { date, duration_minutes = 30 } = params;
-  
-  // Parse business hours from config
-  const businessHours = config.business_hours || {
+
+  // Parse business hours from client
+  const businessHours = client.business_hours || {
     monday: { open: '09:00', close: '17:00' },
     tuesday: { open: '09:00', close: '17:00' },
     wednesday: { open: '09:00', close: '17:00' },
@@ -128,7 +126,7 @@ async function getAvailableSlots(params: any, config: any) {
   );
 }
 
-async function checkAvailability(params: any, config: any) {
+async function checkAvailability(params: any, client: any) {
   const { start_time, end_time } = params;
   
   // For now, assume available (integrate with Google Calendar/Outlook if configured)
@@ -145,7 +143,7 @@ async function checkAvailability(params: any, config: any) {
   );
 }
 
-async function createBooking(params: any, clientId: string, config: any, supabase: any) {
+async function createBooking(params: any, clientId: string, client: any, supabase: any) {
   const { 
     customer_name, 
     customer_phone, 

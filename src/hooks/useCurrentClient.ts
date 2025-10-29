@@ -48,13 +48,20 @@ export function useCurrentClient(): CurrentClientData {
             region: clientData.region || region,
             industry: clientData.industry || industry,
             business_name: clientData.business_name,
-            port: clientData.port || 3011,
-            api_proxy_path: clientData.api_proxy_path || `/api/${clientname}`,
             phone_number: clientData.phone_number,
+            channel_type: clientData.channel_type,
+            voice_id: clientData.voice_id,  // Top-level voice_id
             status: (clientData.status as 'active' | 'inactive' | 'starting' | 'stopping' | 'error') || 'inactive',
             config: (clientData.config as any) || {},
             created_at: clientData.created_at,
-            updated_at: clientData.created_at
+            updated_at: clientData.created_at,
+            // Trial tracking fields
+            trial_calls: clientData.trial_calls,
+            trial_calls_used: clientData.trial_calls_used || 0,
+            trial_conversations: clientData.trial_conversations,
+            trial_conversations_used: clientData.trial_conversations_used || 0,
+            trial_starts_at: clientData.trial_starts_at,
+            trial_ends_at: clientData.trial_ends_at,
           });
         } else {
           setClient(null);

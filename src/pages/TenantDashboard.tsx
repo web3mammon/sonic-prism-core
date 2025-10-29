@@ -6,9 +6,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ModernButton } from "@/components/ui/modern-button";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { StatusDot } from "@/components/ui/status-dot";
-import { LiveDemoSection } from "@/components/LiveDemoSection";
-import { BusinessInfoSection } from "@/components/BusinessInfoSection";
 import { LiveCallMonitor } from "@/components/voice-ai/LiveCallMonitor";
+import { SetupModal } from "@/components/modals/SetupModal";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useClientDashboardStats } from "@/hooks/useClientDashboardStats";
@@ -38,6 +37,7 @@ import {
   Target,
   BarChart3,
   User,
+  Code,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useTheme } from "next-themes";
@@ -53,6 +53,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const [pricingConfig, setPricingConfig] = useState<any>(null);
+  const [isSetupModalOpen, setIsSetupModalOpen] = useState(false);
+  const [voiceProfile, setVoiceProfile] = useState<any>(null);
 
   const isClient = profile?.role === 'client';
 
@@ -72,35 +74,48 @@ export default function Dashboard() {
 
   const currencyInfo = getCurrencyByRegion(region);
 
-  // Fetch pricing config
+  // Set pricing based on THIS client's channel type
   useEffect(() => {
-    async function fetchPricing() {
-      const { data, error } = await supabase
-        .from('pricing_config')
-        .select('*')
-        .eq('currency', currencyInfo.code)
-        .single();
+    if (!client?.channel_type) return;
 
-      if (error) {
-        console.error('Error fetching pricing:', error);
-      } else if (data) {
-        setPricingConfig(data);
-      }
-    }
+    const channelType = client.channel_type || 'phone';
+    setPricingConfig({
+      base_price: channelType === 'phone' ? 49 : channelType === 'website' ? 39 : 69,
+      per_call_price: channelType === 'both' ? 1.50 : 2.00,
+      base_calls: 20,
+      currency: currencyInfo.code
+    });
+  }, [client?.channel_type, currencyInfo.code]);
 
-    if (currencyInfo.code) {
-      fetchPricing();
-    }
-  }, [currencyInfo.code]);
+  // Per-client trial tracking (from voice_ai_clients table)
+  const channelType = client?.channel_type || 'phone';
+  let trialRemaining = 0;
+
+  if (channelType === 'phone') {
+    trialRemaining = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
+  } else if (channelType === 'website') {
+    trialRemaining = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
+  } else {
+    // Both: total remaining
+    const callsLeft = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
+    const convosLeft = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
+    trialRemaining = callsLeft + convosLeft;
+  }
+
+  // TODO: Fetch FlexPrice credits when trial ends
+  // For now, we show trial credits. After trial ends (trialRemaining === 0),
+  // we need to fetch from FlexPrice API and show paid credit balance
+  const isTrialActive = trialRemaining > 0;
 
   const creditData = {
-    balance: enhancedData?.creditBalance || stats?.currentBalance || 0,
+    balance: trialRemaining, // TODO: Add FlexPrice balance after trial
     currency: currencyInfo.code,
     currencySymbol: currencyInfo.symbol,
-    callsRemaining: enhancedData?.callsRemaining || 0,
+    callsRemaining: trialRemaining, // TODO: Add FlexPrice balance after trial
     callsThisMonth: enhancedData?.callsThisMonth || stats?.callsThisMonth || 0,
     averageCallCost: pricingConfig?.per_call_price || 2.00,
-    lowBalanceThreshold: 5
+    lowBalanceThreshold: 5,
+    isTrialActive // Track if showing trial or paid credits
   };
 
   const isLowBalance = creditData.callsRemaining <= creditData.lowBalanceThreshold;
@@ -113,6 +128,29 @@ export default function Dashboard() {
   const handleCustomerData = () => navigate('./call-data');
   const handleTopUp = () => navigate('./billing');
   const handleViewUsage = () => navigate('./call-data');
+  const handleSetupGuide = () => setIsSetupModalOpen(true);
+
+  // Load voice profile for AI Persona Card
+  useEffect(() => {
+    const loadVoiceProfile = async () => {
+      if (!client?.voice_id) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('voice_profiles')
+          .select('*')
+          .eq('voice_id', client.voice_id)
+          .single();
+
+        if (error) throw error;
+        setVoiceProfile(data);
+      } catch (error) {
+        console.error('Error loading voice profile:', error);
+      }
+    };
+
+    loadVoiceProfile();
+  }, [client?.voice_id]);
 
   // Get sentiment emoji
   const getSentimentDisplay = (score: number | null) => {
@@ -183,9 +221,17 @@ export default function Dashboard() {
           <Alert className="border-primary/30 bg-primary/5">
             <AlertTriangle className="h-4 w-4 text-primary" />
             <AlertDescription className="font-medium">
-              <span className="text-primary">Call limits approaching.</span> You have {creditData.callsRemaining} call{creditData.callsRemaining !== 1 ? 's' : ''} remaining.{' '}
+              <span className="text-primary">
+                {channelType === 'phone' ? 'Call' :
+                 channelType === 'website' ? 'Conversation' :
+                 'Trial'} limits approaching.
+              </span> You have {creditData.callsRemaining} {
+                channelType === 'phone' ? 'call' :
+                channelType === 'website' ? 'conversation' :
+                'credit'
+              }{creditData.callsRemaining !== 1 ? 's' : ''} remaining.{' '}
               <Button variant="link" className="text-primary font-medium p-0 ml-1 h-auto underline" onClick={handleTopUp}>
-                Please top up to continue
+                Please upgrade to continue
               </Button>
             </AlertDescription>
           </Alert>
@@ -213,16 +259,17 @@ export default function Dashboard() {
               <Play className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
               Test Call
             </Button>
-            <ModernButton variant="gradient" size="lg" onClick={handleCustomerData}>
-              <Users className="mr-2 h-4 w-4" />
+            <Button variant="outline" size="lg" onClick={handleCustomerData} className="group">
+              <Users className="mr-2 h-4 w-4 group-hover:scale-110 transition-transform" />
               {isClient ? "Call History" : "Customer Data"}
+            </Button>
+            <ModernButton variant="gradient" size="lg" onClick={handleSetupGuide}>
+              <Code className="mr-2 h-4 w-4" />
+              Setup Guide
             </ModernButton>
           </div>
         </div>
       </motion.div>
-
-      {/* Live Demo Section */}
-      {isClient && <LiveDemoSection />}
 
       {/* Hero Stats Row - REAL DATA ONLY */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -235,15 +282,26 @@ export default function Dashboard() {
         >
           {/* AI Avatar - Smaller rectangular */}
           <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br from-primary/10 to-primary/5">
-            <img
-              src="/assets/images/uifaces-human-avatar.jpg"
-              alt="Sofia - AI Receptionist"
-              className="w-full h-full object-cover"
-            />
+            {voiceProfile?.avatar_url ? (
+              <img
+                src={voiceProfile.avatar_url}
+                alt={`${voiceProfile.name} - AI Receptionist`}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-2xl font-light text-primary">
+                {client?.business_name?.charAt(0) || 'AI'}
+              </div>
+            )}
           </div>
           <div className="space-y-1 flex-1">
-            <h3 className="font-medium text-base">Sofia</h3>
-            <p className="text-xs text-muted-foreground">Your AI Receptionist</p>
+            <h3 className="font-medium text-base">{voiceProfile?.name || 'Your AI'}</h3>
+            <p className="text-xs text-muted-foreground">
+              {voiceProfile?.accent === 'US' && 'American'}
+              {voiceProfile?.accent === 'UK' && 'British'}
+              {voiceProfile?.accent === 'AU' && 'Australian'}
+              {voiceProfile?.accent ? ' AI Receptionist' : 'AI Receptionist'}
+            </p>
             <Badge className="text-xs bg-primary/10 text-primary border-primary/20">
               Online 24/7
             </Badge>
@@ -267,8 +325,16 @@ export default function Dashboard() {
               value={enhancedData?.callsThisMonth || 0}
               className="text-4xl font-extralight"
             />
-            <p className="text-sm text-muted-foreground mt-1">Calls This Month</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">total calls</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {channelType === 'phone' ? 'Calls This Month' :
+               channelType === 'website' ? 'Conversations This Month' :
+               'Calls/Conversations This Month'}
+            </p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              {channelType === 'phone' ? 'total calls' :
+               channelType === 'website' ? 'total conversations' :
+               'total interactions'}
+            </p>
           </div>
         </motion.div>
 
@@ -285,16 +351,18 @@ export default function Dashboard() {
             </div>
           </div>
           <div>
-            {enhancedData && enhancedData.callsRemaining !== null ? (
-              <AnimatedNumber
-                value={enhancedData.callsRemaining}
-                className="text-4xl font-extralight text-green-500"
-              />
-            ) : (
-              <span className="text-4xl font-extralight text-muted-foreground">--</span>
-            )}
-            <p className="text-sm text-muted-foreground mt-1">Calls Remaining</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">in current plan</p>
+            <AnimatedNumber
+              value={creditData.callsRemaining}
+              className="text-4xl font-extralight text-green-500"
+            />
+            <p className="text-sm text-muted-foreground mt-1">
+              {channelType === 'phone' ? 'Calls Remaining' :
+               channelType === 'website' ? 'Conversations Remaining' :
+               'Calls/Conversations Remaining'}
+            </p>
+            <p className="text-xs text-muted-foreground/60 mt-1">
+              {creditData.isTrialActive ? 'in free trial' : 'paid credits'}
+            </p>
           </div>
         </motion.div>
 
@@ -427,7 +495,11 @@ export default function Dashboard() {
                 <p className="text-lg font-medium mt-1">
                   <AnimatedNumber value={creditData.callsThisMonth} />
                 </p>
-                <p className="text-xs text-muted-foreground/60 mt-1">total calls</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  {channelType === 'phone' ? 'total calls' :
+                   channelType === 'website' ? 'total conversations' :
+                   'total interactions'}
+                </p>
               </div>
               <Activity className="h-8 w-8 text-primary/30" />
             </div>
@@ -446,16 +518,23 @@ export default function Dashboard() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <CreditCard className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-medium">Credit Balance</h3>
+              <h3 className="text-lg font-medium">
+                {channelType === 'phone' ? 'Calls Remaining' :
+                 channelType === 'website' ? 'Conversations Remaining' :
+                 'Trial Balance'}
+              </h3>
             </div>
             <AnimatedNumber
               value={creditData.balance}
-              decimals={2}
-              prefix={creditData.currencySymbol}
+              decimals={0}
               className="text-4xl font-extralight"
             />
             <p className="text-sm text-muted-foreground mt-2">
-              ≈ {creditData.callsRemaining} calls remaining
+              {creditData.callsRemaining} {
+                channelType === 'phone' ? 'call' :
+                channelType === 'website' ? 'conversation' :
+                'call/conversation'
+              }{creditData.callsRemaining !== 1 ? 's' : ''} available
             </p>
           </div>
 
@@ -466,8 +545,18 @@ export default function Dashboard() {
             </div>
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Calls used this month</span>
-                <span className="font-semibold">{creditData.callsThisMonth} calls</span>
+                <span className="text-muted-foreground">
+                  {channelType === 'phone' ? 'Calls used this month' :
+                   channelType === 'website' ? 'Conversations this month' :
+                   'Usage this month'}
+                </span>
+                <span className="font-semibold">
+                  {creditData.callsThisMonth} {
+                    channelType === 'phone' ? 'calls' :
+                    channelType === 'website' ? 'conversations' :
+                    'interactions'
+                  }
+                </span>
               </div>
               <div className="relative h-3">
                 <div className="absolute inset-0 rounded-full bg-white/5" />
@@ -496,9 +585,6 @@ export default function Dashboard() {
           </div>
         </div>
       </motion.div>
-
-      {/* Business Info */}
-      {isClient && <BusinessInfoSection />}
 
       {/* Live Call Monitoring & Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-3">
@@ -594,6 +680,15 @@ export default function Dashboard() {
           )}
         </motion.div>
       </div>
+
+      {/* Setup Guide Modal */}
+      <SetupModal
+        isOpen={isSetupModalOpen}
+        onClose={() => setIsSetupModalOpen(false)}
+        channelType={client?.channel_type}
+        twilioPhoneNumber={client?.phone_number}
+        clientId={client?.client_id}
+      />
     </div>
   );
 }

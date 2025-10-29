@@ -48,47 +48,51 @@ export default function Billing() {
   };
 
   const currency = getCurrency();
+  const channelType = client?.channel_type || 'phone';
 
   const [pricingConfig, setPricingConfig] = useState<any>(null);
 
   // Fetch real credit data and pricing from database
   useEffect(() => {
     async function fetchCredits() {
-      if (!client?.user_id) return;
+      if (!client?.client_id) return;
 
       setLoadingCredits(true);
 
-      // Fetch credits
-      const { data, error } = await supabase
-        .from('credits')
-        .select('*')
-        .eq('user_id', client.user_id)
-        .single();
+      // Credits are now per-client trial tracking
+      // Calculate remaining based on channel type
+      const channelType = client.channel_type || 'phone';
+      let trialRemaining = 0;
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching credits:', error);
-      } else if (data) {
-        setCreditData(data);
+      if (channelType === 'phone') {
+        trialRemaining = Math.max(0, (client.trial_calls || 0) - (client.trial_calls_used || 0));
+      } else if (channelType === 'website') {
+        trialRemaining = Math.max(0, (client.trial_conversations || 0) - (client.trial_conversations_used || 0));
+      } else {
+        // Both: total remaining
+        const callsLeft = Math.max(0, (client.trial_calls || 0) - (client.trial_calls_used || 0));
+        const convosLeft = Math.max(0, (client.trial_conversations || 0) - (client.trial_conversations_used || 0));
+        trialRemaining = callsLeft + convosLeft;
       }
 
-      // Fetch pricing config for current currency
-      const { data: pricing, error: pricingError } = await supabase
-        .from('pricing_config')
-        .select('*')
-        .eq('currency', currency.code)
-        .single();
+      setCreditData({
+        balance: trialRemaining,
+        credits: trialRemaining
+      });
 
-      if (pricingError) {
-        console.error('Error fetching pricing:', pricingError);
-      } else if (pricing) {
-        setPricingConfig(pricing);
-      }
+      // Pricing based on THIS client's channel type
+      setPricingConfig({
+        base_price: channelType === 'phone' ? 49 : channelType === 'website' ? 39 : 69,
+        per_call_price: channelType === 'both' ? 1.50 : channelType === 'phone' ? 2.00 : 1.50,
+        base_calls: 20,
+        currency: currency.code
+      });
 
       setLoadingCredits(false);
     }
 
     fetchCredits();
-  }, [client?.user_id, currency.code]);
+  }, [client?.client_id, client?.credits, currency.code]);
 
   // Handle payment redirect success/failure
   useEffect(() => {
@@ -102,10 +106,9 @@ export default function Billing() {
     }
   }, []);
 
-  // Real data from database
-  const currentBalance = creditData?.balance || 0;
-  const callCost = pricingConfig?.per_call_price || 2; // Get from pricing_config
-  const estimatedCallsRemaining = Math.floor(currentBalance / callCost);
+  // Real data from database (per-client credits)
+  const creditsRemaining = creditData?.credits || 0; // Each credit = 1 call/chat
+  const callCost = pricingConfig?.per_call_price || 2; // Get from pricing_config (for paid plans)
 
   // Subscription data (from database and pricing_config)
   const subscriptionActive = (creditData?.calls_included || 0) > 0;
@@ -178,7 +181,11 @@ export default function Billing() {
               <div className="p-2 rounded-lg bg-primary/10">
                 <Zap className="h-5 w-5 text-primary" />
               </div>
-              <h2 className="text-2xl font-extralight">Available Calls</h2>
+              <h2 className="text-2xl font-extralight">
+                {channelType === 'phone' ? 'Available Calls' :
+                 channelType === 'website' ? 'Available Conversations' :
+                 'Available Credits'}
+              </h2>
             </div>
             <Badge className={subscriptionActive ? "bg-green-500/10 text-green-500 border-green-500/20" : "bg-gray-500/10 text-gray-500 border-gray-500/20"}>
               {subscriptionActive ? (
@@ -192,13 +199,17 @@ export default function Billing() {
             </Badge>
           </div>
 
-          {/* Total Calls */}
+          {/* Total Credits */}
           <div className="flex items-baseline gap-2">
             <AnimatedNumber
-              value={estimatedCallsRemaining + includedCalls}
+              value={creditsRemaining}
               className="text-5xl font-extralight"
             />
-            <span className="text-2xl text-muted-foreground">calls total</span>
+            <span className="text-2xl text-muted-foreground">
+              {channelType === 'phone' ? 'calls remaining' :
+               channelType === 'website' ? 'conversations remaining' :
+               'credits remaining'}
+            </span>
           </div>
 
           {/* Breakdown */}
@@ -206,17 +217,11 @@ export default function Billing() {
             <div className="flex items-center justify-between p-4 rounded-xl border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02]">
               <div className="flex items-center gap-3">
                 <div className="w-2 h-2 rounded-full bg-primary"></div>
-                <span className="text-sm font-medium">{includedCalls} included calls</span>
+                <span className="text-sm font-medium">Free Trial</span>
               </div>
-              <span className="text-sm text-muted-foreground">{currency.symbol}{subscriptionPrice}/mo</span>
-            </div>
-
-            <div className="flex items-center justify-between p-4 rounded-xl border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02]">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                <span className="text-sm font-medium">{estimatedCallsRemaining} additional calls</span>
-              </div>
-              <span className="text-sm text-muted-foreground">{currency.symbol}{currentBalance} balance</span>
+              <span className="text-sm text-muted-foreground">
+                {creditsRemaining} / {channelType === 'both' ? '20' : '10'} remaining
+              </span>
             </div>
 
             <div className="flex items-center justify-between text-sm pt-3 border-t border-black/[0.05] dark:border-white/5">
@@ -237,17 +242,33 @@ export default function Billing() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Total calls</span>
+                <span className="text-sm text-muted-foreground">
+                  {channelType === 'phone' ? 'Total calls' :
+                   channelType === 'website' ? 'Total conversations' :
+                   'Total interactions'}
+                </span>
                 <AnimatedNumber value={callsUsedThisMonth} className="text-2xl font-extralight" />
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Included calls used</span>
+                <span className="text-sm text-muted-foreground">
+                  {channelType === 'phone' ? 'Included calls used' :
+                   channelType === 'website' ? 'Included conversations used' :
+                   'Included usage'}
+                </span>
                 <span className="text-lg font-medium">{Math.min(callsUsedThisMonth, includedCalls)} / {includedCalls}</span>
               </div>
               {overageCalls > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Additional calls</span>
-                  <span className="text-lg font-medium text-primary">{overageCalls} calls</span>
+                  <span className="text-sm text-muted-foreground">
+                    {channelType === 'phone' ? 'Additional calls' :
+                     channelType === 'website' ? 'Additional conversations' :
+                     'Additional usage'}
+                  </span>
+                  <span className="text-lg font-medium text-primary">
+                    {overageCalls} {channelType === 'phone' ? 'calls' :
+                                    channelType === 'website' ? 'conversations' :
+                                    'interactions'}
+                  </span>
                 </div>
               )}
               <div className="flex items-center justify-between pt-3 border-t border-black/[0.05] dark:border-white/5">

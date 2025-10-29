@@ -32,21 +32,22 @@ export function useAudioFiles(clientId: string | null) {
     try {
       setLoading(true);
 
-      // Fetch client's intro audio file
+      // Fetch client data
       const { data: client, error: clientError } = await supabase
         .from('voice_ai_clients')
-        .select('intro_audio_file, created_at, business_name')
+        .select('created_at, business_name')
         .eq('client_id', clientId)
         .single();
 
       if (clientError) throw clientError;
 
-      // If client has intro audio file, format it for display
+      // Construct intro audio file paths using naming convention
       const files: AudioFile[] = [];
 
-      if (client?.intro_audio_file) {
+      if (client) {
         const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-        const audioUrl = `${SUPABASE_URL}/storage/v1/object/public/audio-snippets/${client.intro_audio_file}`;
+        const audioFileName_mp3 = `${clientId}_intro.mp3`;
+        const audioUrl = `${SUPABASE_URL}/storage/v1/object/public/audio-snippets/${audioFileName_mp3}`;
 
         // Check if file exists in storage by attempting to fetch metadata
         let fileExists = true;
@@ -58,10 +59,10 @@ export function useAudioFiles(clientId: string | null) {
         }
 
         files.push({
-          id: client.intro_audio_file,
-          file_name: client.intro_audio_file,
+          id: audioFileName_mp3,
+          file_name: audioFileName_mp3,
           file_path: audioUrl,
-          file_type: 'audio/basic', // ulaw format
+          file_type: 'audio/mpeg', // mp3 format
           category: 'introductions',
           text_content: `Introduction message for ${client.business_name}`,
           duration_ms: null, // We don't track duration yet

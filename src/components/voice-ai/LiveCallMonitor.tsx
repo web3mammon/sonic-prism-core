@@ -60,33 +60,14 @@ export const LiveCallMonitor: React.FC<LiveCallMonitorProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Active Calls Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <Phone className="h-5 w-5" />
-          <h3 className="text-lg font-semibold">
-            Live Calls {activeCalls.length > 0 && `(${activeCalls.length})`}
-          </h3>
-        </div>
-        
-        {activeCalls.length > 0 && (
-          <Badge variant="outline" className="bg-green-50 text-green-700">
-            <div className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></div>
-            {activeCalls.length} Active
-          </Badge>
-        )}
-      </div>
-
       {activeCalls.length === 0 ? (
-        <Card className="bg-muted/50">
-          <CardContent className="text-center py-12">
-            <Phone className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-medium mb-2">No Active Calls</h3>
-            <p className="text-muted-foreground">
-              All Voice AI clients are ready to receive calls
-            </p>
-          </CardContent>
-        </Card>
+        <div className="rounded-2xl border border-white/8 bg-white/[0.02] p-8 text-center">
+          <Phone className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-2">No Active Calls</h3>
+          <p className="text-muted-foreground text-sm">
+            All Voice AI clients are ready to receive calls
+          </p>
+        </div>
       ) : (
         <div className="grid gap-4">
           {activeCalls.map((call) => (

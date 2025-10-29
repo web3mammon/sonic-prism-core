@@ -13,10 +13,13 @@ import {
   Sparkles,
   Plug,
   CreditCard,
+  MessageSquare,
+  Users,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/hooks/useTenant";
+import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
@@ -36,6 +39,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const { hasRole } = useAuth();
   const { region, industry, clientName, isValid } = useTenant();
+  const { client } = useCurrentClient();
   const location = useLocation();
   const { theme } = useTheme();
   const isCollapsed = state === "collapsed";
@@ -45,22 +49,45 @@ export function AppSidebar() {
   const basePath = isInTenantContext ? `/${region}/${industry}/${clientName}` : '';
   const isOnCentralHQ = location.pathname === '/' && !isInTenantContext;
 
+  // Get channel type - defaults to 'phone' if not set
+  const channelType = client?.channel_type || 'phone';
+
   const navigationItems = [
     // For Central HQ - only show when actually on Central HQ
     ...(isOnCentralHQ ? [
       { title: "Central HQ", url: "/", icon: Home }
     ] : isInTenantContext ? [
-      // For tenant routes - show client-specific navigation
+      // Universal pages - always show
       {
         title: "Dashboard",
         url: basePath,
         icon: Home
       },
       { title: "Business Details", url: `${basePath}/business-details`, icon: Building2 },
-      { title: "Testing", url: `${basePath}/testing`, icon: TestTube },
-      { title: "Call Data", url: `${basePath}/call-data`, icon: Database },
-      { title: "Call Logs", url: `${basePath}/logs`, icon: ScrollText },
+
+      // Phone-specific pages (show for 'phone' or 'both')
+      ...(channelType === 'phone' || channelType === 'both' ? [
+        { title: "Testing", url: `${basePath}/testing`, icon: TestTube },
+        { title: "Call Data", url: `${basePath}/call-data`, icon: Database },
+      ] : []),
+
+      // Website-specific pages (show for 'website' or 'both')
+      ...(channelType === 'website' || channelType === 'both' ? [
+        { title: "Widget Settings", url: `${basePath}/widget-settings`, icon: Settings },
+        { title: "Chat Data", url: `${basePath}/chat-data`, icon: MessageSquare },
+      ] : []),
+
+      // Logs page with dynamic label
+      {
+        title: channelType === 'both' ? "Conversation Logs" :
+               channelType === 'phone' ? "Call Logs" : "Chat Logs",
+        url: `${basePath}/logs`,
+        icon: ScrollText
+      },
+
+      // Universal pages - always show
       { title: "Analytics", url: `${basePath}/analytics`, icon: BarChart3 },
+      { title: "Leads", url: `${basePath}/leads`, icon: Users },
       { title: "Integrations", url: `${basePath}/integrations`, icon: Plug },
       { title: "Billing", url: `${basePath}/billing`, icon: CreditCard },
     ] : [])

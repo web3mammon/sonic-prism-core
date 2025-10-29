@@ -3,6 +3,9 @@ project_id = "btqccksigmohyjdxgrrj"
 [functions.voice-websocket]
 verify_jwt = false
 
+[functions.chat-websocket]
+verify_jwt = false
+
 [functions.serve-audio-snippet]
 verify_jwt = false
 
@@ -16,4 +19,7 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.agent-transfer]
+verify_jwt = false
+
+[functions.analyze-website]
 verify_jwt = false

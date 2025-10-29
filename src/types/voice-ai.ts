@@ -7,15 +7,15 @@ export interface VoiceAIClient {
   region: string;
   industry: string;
   business_name: string;
-  port: number;
-  api_proxy_path?: string;
   status: 'active' | 'inactive' | 'starting' | 'stopping' | 'error';
   phone_number?: string;
+  channel_type?: 'phone' | 'website' | 'both';
+  voice_id?: string;  // Top-level field (matches database schema)
   call_transfer_number?: string;
   call_transfer_enabled?: boolean;
   config: {
     system_prompt?: string;
-    voice_id?: string;
+    voice_id?: string;  // Also kept in config for backward compatibility
     response_format?: string;
     features?: {
       sms_enabled?: boolean;
