@@ -153,6 +153,13 @@ serve(async (req) => {
       sunday: { closed: true }
     };
 
+    // EXPLICITLY set trial allocations based on channel_type
+    // Don't rely on DB trigger - it's not working reliably
+    const trial_calls = channel_type === 'phone' ? 10 : channel_type === 'website' ? 0 : 10;
+    const trial_conversations = channel_type === 'phone' ? 0 : channel_type === 'website' ? 10 : 10;
+
+    console.log(`[ClientProvisioning] Trial allocation for channel_type '${channel_type}': ${trial_calls} calls, ${trial_conversations} conversations`);
+
     const { data: clientData, error: clientError} = await supabaseClient
       .from('voice_ai_clients')
       .insert({
@@ -170,11 +177,14 @@ serve(async (req) => {
         business_hours: business_hours,
         channel_type: channel_type,
         status: 'active',
-        // trial_calls and trial_conversations automatically set by DB trigger based on channel_type
-        // phone: 10 calls, 0 conversations | website: 0 calls, 10 conversations | both: 10 calls, 10 conversations
+        // EXPLICITLY set trial allocations (don't rely on trigger)
+        trial_calls: trial_calls,
+        trial_conversations: trial_conversations,
+        trial_calls_used: 0,
+        trial_conversations_used: 0,
         created_at: new Date().toISOString(),
       })
-      .select()
+      .select('client_id, client_slug, user_id, business_name, region, industry, phone_number, voice_id, greeting_message, system_prompt, timezone, business_hours, channel_type, status, trial_calls, trial_calls_used, trial_conversations, trial_conversations_used, trial_starts_at, trial_ends_at, created_at')
       .single();
 
     if (clientError) {

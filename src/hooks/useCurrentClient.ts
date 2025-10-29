@@ -52,7 +52,13 @@ export function useCurrentClient(): CurrentClientData {
             channel_type: clientData.channel_type,
             voice_id: clientData.voice_id,  // Top-level voice_id
             status: (clientData.status as 'active' | 'inactive' | 'starting' | 'stopping' | 'error') || 'inactive',
-            config: (clientData.config as any) || {},
+
+            // Actual database fields (config column dropped)
+            system_prompt: clientData.system_prompt,
+            greeting_message: clientData.greeting_message,
+            business_hours: clientData.business_hours,
+            timezone: clientData.timezone,
+
             created_at: clientData.created_at,
             updated_at: clientData.created_at,
             // Trial tracking fields

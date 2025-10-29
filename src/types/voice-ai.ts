@@ -13,17 +13,21 @@ export interface VoiceAIClient {
   voice_id?: string;  // Top-level field (matches database schema)
   call_transfer_number?: string;
   call_transfer_enabled?: boolean;
-  config: {
-    system_prompt?: string;
-    voice_id?: string;  // Also kept in config for backward compatibility
-    response_format?: string;
-    features?: {
-      sms_enabled?: boolean;
-      calendar_integration?: boolean;
-      session_memory?: boolean;
-      transcript_logging?: boolean;
-    };
-  };
+
+  // Actual database fields (config column dropped Oct 29, 2025)
+  system_prompt?: string;
+  greeting_message?: string;
+  business_hours?: any;  // JSONB - business hours schedule
+  timezone?: string;  // IANA timezone
+
+  // Trial tracking
+  trial_calls?: number;
+  trial_calls_used?: number;
+  trial_conversations?: number;
+  trial_conversations_used?: number;
+  trial_starts_at?: string;
+  trial_ends_at?: string;
+
   created_at: string;
   updated_at: string;
 }

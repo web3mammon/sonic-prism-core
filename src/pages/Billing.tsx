@@ -81,10 +81,15 @@ export default function Billing() {
       });
 
       // Pricing based on THIS client's channel type
+      // base_calls = total trial allocation (not hardcoded 20)
+      const totalTrialAllocation = channelType === 'phone' ? (client.trial_calls || 10)
+                                  : channelType === 'website' ? (client.trial_conversations || 10)
+                                  : (client.trial_calls || 10) + (client.trial_conversations || 10);
+
       setPricingConfig({
         base_price: channelType === 'phone' ? 49 : channelType === 'website' ? 39 : 69,
         per_call_price: channelType === 'both' ? 1.50 : channelType === 'phone' ? 2.00 : 1.50,
-        base_calls: 20,
+        base_calls: totalTrialAllocation,
         currency: currency.code
       });
 

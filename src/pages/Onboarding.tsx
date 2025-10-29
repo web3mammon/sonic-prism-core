@@ -643,7 +643,7 @@ export default function Onboarding() {
 
             {/* Website URL Input */}
             {!isAnalyzing && (
-              <div className="space-y-6">
+              <form onSubmit={(e) => { e.preventDefault(); if (websiteUrl) handleAnalyzeWebsite(); }} className="space-y-6">
                 <div>
                   <label className="block text-sm font-medium mb-2">
                     What's your website URL?
@@ -654,11 +654,12 @@ export default function Onboarding() {
                     value={websiteUrl}
                     onChange={(e) => setWebsiteUrl(e.target.value)}
                     className="text-lg h-14"
+                    autoFocus
                   />
                 </div>
 
                 <ModernButton
-                  onClick={handleAnalyzeWebsite}
+                  type="submit"
                   disabled={!websiteUrl}
                   className="w-full h-14 text-lg"
                 >
@@ -681,7 +682,7 @@ export default function Onboarding() {
                     Skip and enter details manually →
                   </button>
                 </div>
-              </div>
+              </form>
             )}
 
             {/* Loading Animation */}
@@ -1043,7 +1044,12 @@ export default function Onboarding() {
               </p>
             </div>
 
-            <div className="space-y-6">
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              if (!isCreatingAccount && fullName && email && password && agreeToTerms && validateEmail(email)) {
+                handleCreateAccount();
+              }
+            }} className="space-y-6">
               {/* Full Name */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Full Name *</label>
@@ -1053,6 +1059,7 @@ export default function Onboarding() {
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="John Doe"
                   className="text-lg h-12"
+                  autoFocus
                 />
               </div>
 
@@ -1171,7 +1178,7 @@ export default function Onboarding() {
 
               {/* Create Account Button */}
               <ModernButton
-                onClick={handleCreateAccount}
+                type="submit"
                 disabled={
                   isCreatingAccount ||
                   !fullName ||
@@ -1202,7 +1209,7 @@ export default function Onboarding() {
                   </a>
                 </p>
               </div>
-            </div>
+            </form>
           </motion.div>
         );
 
