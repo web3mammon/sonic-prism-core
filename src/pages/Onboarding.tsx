@@ -572,7 +572,7 @@ export default function Onboarding() {
             </div>
 
             {/* Channel Cards */}
-            <div className="grid md:grid-cols-3 gap-6 mb-8 items-start">
+            <div className="grid md:grid-cols-3 gap-6 mb-8 items-center">
               <ChannelCard
                 icon={<MessageSquare className="w-10 h-10 text-primary mb-4" />}
                 title="Handle Website Visitors"
