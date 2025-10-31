@@ -770,7 +770,7 @@ export default function Onboarding() {
                   onChange={(e) => updateState({
                     analysis: { ...state.analysis, business_location: e.target.value }
                   })}
-                  className={`w-full h-12 text-lg bg-background border rounded-md px-3 ${
+                  className={`w-full h-12 text-sm leading-5 bg-background border rounded-md px-3 ${
                     !state.analysis?.business_location ? 'border-red-500/50' : 'border-white/8'
                   }`}
                 >
@@ -794,7 +794,7 @@ export default function Onboarding() {
                     analysis: { ...state.analysis, services: e.target.value.split('\n').filter(s => s.trim()) }
                   })}
                   placeholder="One service per line, e.g.:&#10;AI Phone Receptionist&#10;Website Chat Widget&#10;24/7 Customer Support"
-                  className={`text-lg min-h-[120px] ${!state.analysis?.services || state.analysis?.services.length === 0 ? 'border-red-500/50' : ''}`}
+                  className={`text-sm leading-5 min-h-[120px] ${!state.analysis?.services || state.analysis?.services.length === 0 ? 'border-red-500/50' : ''}`}
                 />
               </div>
 
@@ -840,7 +840,7 @@ export default function Onboarding() {
                       });
                     }
                   }}
-                  className="w-full h-12 text-lg bg-background border border-white/8 rounded-md px-3"
+                  className="w-full h-12 text-sm leading-5 bg-background border border-white/8 rounded-md px-3"
                 >
                   <option value="professional">Professional</option>
                   <option value="friendly">Friendly</option>
@@ -866,7 +866,7 @@ export default function Onboarding() {
                   value={state.system_prompt || ''}
                   onChange={(e) => updateState({ system_prompt: e.target.value })}
                   placeholder="Click 'Generate Instructions' to auto-create based on your details above, or write custom instructions..."
-                  className="text-lg min-h-[200px] font-mono"
+                  className="text-sm leading-5 min-h-[200px]"
                 />
                 <p className="text-xs text-muted-foreground">
                   This tells your AI how to behave when talking to customers. Click "Generate Instructions" after filling in the fields above.
