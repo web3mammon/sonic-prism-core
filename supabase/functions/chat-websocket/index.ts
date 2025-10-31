@@ -547,6 +547,117 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
 
     const aiResponse = fullResponse || 'I apologize, I didn\'t catch that.';
 
+    // ======================================
+    // CHECK FOR APPOINTMENT BOOKING REQUEST
+    // ======================================
+    if (aiResponse.includes('BOOKING_APPOINTMENT')) {
+      console.log('[Booking] AI requested appointment booking');
+
+      try {
+        // Extract booking details from AI response
+        const bookingSection = aiResponse.split('BOOKING_APPOINTMENT')[1];
+        const dateMatch = bookingSection.match(/DATE:\s*(\d{4}-\d{2}-\d{2})/);
+        const startTimeMatch = bookingSection.match(/START_TIME:\s*(\d{2}:\d{2})/);
+        const endTimeMatch = bookingSection.match(/END_TIME:\s*(\d{2}:\d{2})/);
+        const nameMatch = bookingSection.match(/CUSTOMER_NAME:\s*(.+)/);
+        const phoneMatch = bookingSection.match(/CUSTOMER_PHONE:\s*(.+)/);
+        const emailMatch = bookingSection.match(/CUSTOMER_EMAIL:\s*(.+)/);
+        const serviceMatch = bookingSection.match(/SERVICE:\s*(.+)/);
+        const notesMatch = bookingSection.match(/NOTES:\s*(.+)/);
+
+        if (dateMatch && startTimeMatch && endTimeMatch && nameMatch) {
+          const date = dateMatch[1].trim();
+          const startTime = startTimeMatch[1].trim();
+          const endTime = endTimeMatch[1].trim();
+          const customerName = nameMatch[1].trim();
+          const customerPhone = phoneMatch ? phoneMatch[1].trim() : null;
+          const customerEmail = emailMatch ? emailMatch[1].trim() : session.visitorEmail || null;
+          const service = serviceMatch ? serviceMatch[1].trim() : 'General appointment';
+          const notes = notesMatch ? notesMatch[1].trim() : '';
+
+          console.log('[Booking] Parsed booking details:', {
+            date,
+            startTime,
+            endTime,
+            customerName,
+            customerEmail,
+            service
+          });
+
+          // Get Supabase client
+          const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
+          const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          );
+
+          // Call calendar-integration function to create booking
+          const { data: bookingData, error: bookingError } = await supabaseClient.functions.invoke('calendar-integration', {
+            body: {
+              action: 'create_booking',
+              client_id: session.client.client_id,
+              customer_name: customerName,
+              customer_phone: customerPhone,
+              customer_email: customerEmail,
+              start_time: `${date}T${startTime}:00`,
+              end_time: `${date}T${endTime}:00`,
+              service_type: service,
+              notes: notes,
+              session_id: sessionId,
+              source: 'website',
+              lead_id: session.lead_id || null
+            }
+          });
+
+          if (bookingError) {
+            console.error('[Booking] ❌ Error creating appointment:', bookingError);
+
+            // Notify customer of booking failure
+            const errorMessage = "I apologize, but I'm having trouble scheduling your appointment right now. Let me take down your information and someone from our team will call you back to confirm your booking.";
+
+            socket.send(JSON.stringify({
+              type: 'text.chunk',
+              text: errorMessage
+            }));
+
+            await generateSpeechChunk(sessionId, errorMessage, socket, audioChunkIndex++);
+
+            session.transcript.push({
+              role: 'assistant',
+              content: errorMessage,
+              timestamp: new Date().toISOString(),
+              message_type: 'booking_error'
+            });
+          } else {
+            console.log('[Booking] ✅ Appointment created successfully:', bookingData);
+
+            // Confirm booking to customer
+            const confirmMessage = `Perfect! I've scheduled your appointment for ${service} on ${date} at ${startTime}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
+
+            socket.send(JSON.stringify({
+              type: 'text.chunk',
+              text: confirmMessage
+            }));
+
+            await generateSpeechChunk(sessionId, confirmMessage, socket, audioChunkIndex++);
+
+            // Log booking in conversation
+            session.transcript.push({
+              role: 'assistant',
+              content: confirmMessage,
+              timestamp: new Date().toISOString(),
+              message_type: 'booking_confirmation',
+              metadata: bookingData
+            });
+          }
+        } else {
+          console.warn('[Booking] ⚠️  Missing required booking details in AI response');
+        }
+      } catch (bookingError) {
+        console.error('[Booking] ❌ Booking processing failed:', bookingError);
+      }
+    }
+
     socket.send(JSON.stringify({
       type: 'text.complete',
       text: aiResponse
@@ -558,9 +669,14 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
     }));
 
     // Update conversation history
+    // Remove booking markers from response before storing
+    const cleanedAiResponse = aiResponse
+      .replace(/BOOKING_APPOINTMENT[\s\S]*?(?=\n\n|$)/g, '')
+      .trim();
+
     session.conversationHistory.push(
       { role: 'user', content: userInput },
-      { role: 'assistant', content: aiResponse }
+      { role: 'assistant', content: cleanedAiResponse }
     );
 
     session.transcript.push({

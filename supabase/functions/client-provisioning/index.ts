@@ -20,6 +20,12 @@ interface ClientProvisioningRequest {
   greeting_text?: string;
   system_prompt?: string;
   voice_id?: string;
+  // NEW: Business context fields
+  website_url?: string;
+  services_offered?: string[];
+  pricing_info?: string;
+  target_audience?: string;
+  tone?: string;
 }
 
 serve(async (req) => {
@@ -183,8 +189,14 @@ serve(async (req) => {
         trial_calls_used: 0,
         trial_conversations_used: 0,
         created_at: new Date().toISOString(),
+        // NEW: Business context fields
+        website_url: requestData.website_url || null,
+        services_offered: requestData.services_offered || [],
+        pricing_info: requestData.pricing_info || null,
+        target_audience: requestData.target_audience || null,
+        tone: requestData.tone || 'professional',
       })
-      .select('client_id, client_slug, user_id, business_name, region, industry, phone_number, voice_id, greeting_message, system_prompt, timezone, business_hours, channel_type, status, trial_calls, trial_calls_used, trial_conversations, trial_conversations_used, trial_starts_at, trial_ends_at, created_at')
+      .select('client_id, client_slug, user_id, business_name, region, industry, phone_number, voice_id, greeting_message, system_prompt, timezone, business_hours, channel_type, status, trial_calls, trial_calls_used, trial_conversations, trial_conversations_used, trial_starts_at, trial_ends_at, created_at, website_url, services_offered, pricing_info, target_audience, tone')
       .single();
 
     if (clientError) {

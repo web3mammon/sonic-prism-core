@@ -144,76 +144,92 @@ async function checkAvailability(params: any, client: any) {
 }
 
 async function createBooking(params: any, clientId: string, client: any, supabase: any) {
-  const { 
-    customer_name, 
-    customer_phone, 
+  const {
+    customer_name,
+    customer_phone,
     customer_email,
-    start_time, 
-    end_time, 
+    start_time,
+    end_time,
     service_type,
     notes,
-    requires_approval = true
+    session_id,
+    source = 'phone',
+    lead_id = null,
+    requires_approval = false
   } = params;
 
-  // Store booking in database
-  const { data: booking, error: bookingError } = await supabase
-    .from('bookings')
+  // Parse date and time from ISO timestamps
+  const startDate = new Date(start_time);
+  const endDate = new Date(end_time);
+  const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+
+  // Extract date and time components
+  const date = startDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  const start_time_only = startDate.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+  const end_time_only = endDate.toTimeString().split(' ')[0].substring(0, 5); // HH:MM
+
+  // Store appointment in database (FIXED: 'bookings' → 'appointments')
+  const { data: appointment, error: appointmentError } = await supabase
+    .from('appointments')
     .insert({
       client_id: clientId,
       customer_name,
-      customer_phone,
-      customer_email,
-      start_time,
-      end_time,
-      service_type,
-      notes,
-      status: requires_approval ? 'pending_approval' : 'confirmed',
-      created_at: new Date().toISOString()
+      customer_phone: customer_phone || null,
+      customer_email: customer_email || null,
+      date: date,
+      start_time: start_time_only,
+      end_time: end_time_only,
+      duration_minutes: durationMinutes,
+      status: 'scheduled',
+      source: source,
+      session_id: session_id || null,
+      lead_id: lead_id,
+      notes: notes || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     })
     .select()
     .single();
 
-  if (bookingError) {
-    throw new Error(`Failed to create booking: ${bookingError.message}`);
+  if (appointmentError) {
+    throw new Error(`Failed to create appointment: ${appointmentError.message}`);
   }
 
   return new Response(
     JSON.stringify({
       success: true,
-      booking: booking,
-      requires_approval: requires_approval,
-      message: requires_approval 
-        ? 'Booking request submitted for approval' 
-        : 'Booking confirmed'
+      appointment: appointment,
+      message: 'Appointment scheduled successfully'
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );
 }
 
 async function requestBookingApproval(params: any, clientId: string, supabase: any) {
-  const { booking_id, action } = params; // action: 'approve' or 'reject'
-  
-  const newStatus = action === 'approve' ? 'confirmed' : 'rejected';
-  
+  const { appointment_id, action } = params; // action: 'approve' or 'reject'
+
+  const newStatus = action === 'approve' ? 'scheduled' : 'cancelled';
+
+  // FIXED: 'bookings' → 'appointments'
   const { error } = await supabase
-    .from('bookings')
-    .update({ 
+    .from('appointments')
+    .update({
       status: newStatus,
       updated_at: new Date().toISOString()
     })
-    .eq('id', booking_id)
+    .eq('id', appointment_id)
     .eq('client_id', clientId);
 
   if (error) {
-    throw new Error(`Failed to update booking: ${error.message}`);
+    throw new Error(`Failed to update appointment: ${error.message}`);
   }
 
   return new Response(
     JSON.stringify({
       success: true,
-      booking_id,
+      appointment_id,
       status: newStatus,
-      message: `Booking ${action}d successfully`
+      message: `Appointment ${action}d successfully`
     }),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   );

@@ -11,14 +11,16 @@ import {
   Download,
   Phone,
   Mail,
-  Calendar,
+  Calendar as CalendarIcon,
   Filter,
   Loader2,
   Globe,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Plus
 } from "lucide-react";
+import BookingModal from "@/components/BookingModal";
 import {
   Select,
   SelectContent,
@@ -36,6 +38,13 @@ interface Lead {
   source: 'phone' | 'website';
   status: 'new' | 'contacted' | 'converted' | 'lost';
   captured_at: string;
+  next_appointment?: {
+    id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    status: string;
+  } | null;
 }
 
 export default function Leads() {
@@ -44,6 +53,8 @@ export default function Leads() {
   const [loading, setLoading] = useState(true);
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   // Fetch leads
   useEffect(() => {
@@ -66,10 +77,32 @@ export default function Leads() {
           query = query.eq('status', statusFilter);
         }
 
-        const { data, error } = await query;
+        const { data: leadsData, error } = await query;
 
         if (error) throw error;
-        setLeads(data || []);
+
+        // Fetch appointments for each lead
+        const leadsWithAppointments = await Promise.all(
+          (leadsData || []).map(async (lead) => {
+            // Get next upcoming appointment
+            const { data: appointments } = await supabase
+              .from('appointments')
+              .select('id, date, start_time, end_time, status')
+              .eq('lead_id', lead.lead_id)
+              .eq('status', 'scheduled')
+              .gte('date', new Date().toISOString().split('T')[0])
+              .order('date', { ascending: true })
+              .order('start_time', { ascending: true })
+              .limit(1);
+
+            return {
+              ...lead,
+              next_appointment: appointments && appointments.length > 0 ? appointments[0] : null
+            };
+          })
+        );
+
+        setLeads(leadsWithAppointments);
       } catch (error) {
         console.error('Error fetching leads:', error);
         toast.error('Failed to load leads');
@@ -142,6 +175,40 @@ export default function Leads() {
       console.error('Error updating lead:', error);
       toast.error('Failed to update lead status');
     }
+  };
+
+  // Handle schedule appointment for lead
+  const handleScheduleAppointment = (lead: Lead) => {
+    setSelectedLead(lead);
+    setIsBookingModalOpen(true);
+  };
+
+  // Handle save appointment
+  const handleSaveAppointment = async (appointment: any) => {
+    // Refresh leads to show new appointment
+    const updatedLeads = await Promise.all(
+      leads.map(async (lead) => {
+        if (lead.lead_id === appointment.lead_id) {
+          const { data: appointments } = await supabase
+            .from('appointments')
+            .select('id, date, start_time, end_time, status')
+            .eq('lead_id', lead.lead_id)
+            .eq('status', 'scheduled')
+            .gte('date', new Date().toISOString().split('T')[0])
+            .order('date', { ascending: true })
+            .order('start_time', { ascending: true })
+            .limit(1);
+
+          return {
+            ...lead,
+            next_appointment: appointments && appointments.length > 0 ? appointments[0] : null
+          };
+        }
+        return lead;
+      })
+    );
+
+    setLeads(updatedLeads);
   };
 
   const getStatusBadge = (status: string) => {
@@ -281,7 +348,8 @@ export default function Leads() {
                   <th className="text-left p-4 text-sm font-medium text-muted-foreground">Notes</th>
                   <th className="text-left p-4 text-sm font-medium text-muted-foreground">Source</th>
                   <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Captured</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Next Appointment</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -345,10 +413,31 @@ export default function Leads() {
                       </Select>
                     </td>
                     <td className="p-4">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(lead.captured_at).toLocaleDateString()}
-                      </div>
+                      {lead.next_appointment ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm">
+                            <CalendarIcon className="h-3 w-3 text-primary" />
+                            <span>{new Date(lead.next_appointment.date).toLocaleDateString()}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <span>{lead.next_appointment.start_time} - {lead.next_appointment.end_time}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground italic">No appointment</span>
+                      )}
+                    </td>
+                    <td className="p-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleScheduleAppointment(lead)}
+                        className="gap-2"
+                      >
+                        <Plus className="h-3 w-3" />
+                        Schedule
+                      </Button>
                     </td>
                   </motion.tr>
                 ))}
@@ -356,6 +445,27 @@ export default function Leads() {
             </table>
           </div>
         </motion.div>
+      )}
+
+      {/* Booking Modal */}
+      {client && (
+        <BookingModal
+          isOpen={isBookingModalOpen}
+          onClose={() => {
+            setIsBookingModalOpen(false);
+            setSelectedLead(null);
+          }}
+          onSave={handleSaveAppointment}
+          selectedDate={new Date()}
+          clientId={client.client_id}
+          userId={client.user_id}
+          editingAppointment={selectedLead ? {
+            customer_name: selectedLead.name || '',
+            customer_email: selectedLead.email || '',
+            customer_phone: selectedLead.phone || '',
+            lead_id: selectedLead.lead_id,
+          } : undefined}
+        />
       )}
     </div>
   );

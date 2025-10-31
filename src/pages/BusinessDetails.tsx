@@ -41,17 +41,13 @@ export default function BusinessDetails() {
 
   // Form state - initialize empty, populate when data loads
   const [formData, setFormData] = useState({
-    businessName: "",
-    businessType: "",
-    phoneNumber: "",
-    email: "",
+    // Voice AI Client fields
     websiteUrl: "",
     businessAddress: "",
-    serviceArea: "",
-    businessHours: "",
-    servicesOffered: "",
-    emergencyFee: "",
-    serviceFee: "",
+    servicesOffered: [] as string[],
+    pricingInfo: "",
+    targetAudience: "",
+    tone: "professional",
     callTransferNumber: ""
   });
 
@@ -59,21 +55,21 @@ export default function BusinessDetails() {
   const [businessHours, setBusinessHours] = useState<BusinessHours>({});
   const [timezone, setTimezone] = useState<string>('America/New_York');
 
-  // Initialize form data when profile and client data are available
+  // Initialize form data when client data is available
   useEffect(() => {
-    if (!loading && (profile || client) && !dataLoaded) {
+    if (!loading && client) {
+      console.log('[BusinessDetails] Loading client data:', {
+        website_url: (client as any)?.website_url,
+        business_address: (client as any)?.business_address
+      });
+
       setFormData({
-        businessName: profile?.business_name || client?.business_name || "",
-        businessType: (profile as any)?.business_type || client?.industry || "",
-        phoneNumber: (profile as any)?.phone_number || client?.phone_number || "",
-        email: profile?.email || "",
-        websiteUrl: (profile as any)?.website_url || "",
-        businessAddress: (profile as any)?.business_address || "",
-        serviceArea: (profile as any)?.service_area || "",
-        businessHours: (profile as any)?.business_hours || "",
-        servicesOffered: (profile as any)?.services_offered || "",
-        emergencyFee: (profile as any)?.emergency_fee || "",
-        serviceFee: (profile as any)?.service_fee || "",
+        websiteUrl: (client as any)?.website_url || "",
+        businessAddress: (client as any)?.business_address || "",
+        servicesOffered: (client as any)?.services_offered || [],
+        pricingInfo: (client as any)?.pricing_info || "",
+        targetAudience: (client as any)?.target_audience || "",
+        tone: (client as any)?.tone || "professional",
         callTransferNumber: client?.call_transfer_number || ""
       });
 
@@ -87,63 +83,45 @@ export default function BusinessDetails() {
 
       setDataLoaded(true);
     }
-  }, [loading, profile, client, dataLoaded]);
+  }, [loading, client]); // FIXED: Removed dataLoaded from dependencies
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleSave = async () => {
-    if (!profile?.id) {
-      toast.error("User not found");
+    if (!client) {
+      toast.error("Client not found");
       return;
     }
 
     setIsSaving(true);
     try {
-      // Update user profile with business details
-      const { error: profileError } = await supabase
-        .from('profiles')
+      // Update voice_ai_clients table with ALL business details
+      const { error: clientError } = await supabase
+        .from('voice_ai_clients')
         .update({
-          business_name: formData.businessName,
-          business_type: formData.businessType,
-          phone_number: formData.phoneNumber,
           website_url: formData.websiteUrl || null,
-          business_address: formData.businessAddress,
-          service_area: formData.serviceArea,
-          business_hours: formData.businessHours,
+          business_address: formData.businessAddress || null,
           services_offered: formData.servicesOffered,
-          emergency_fee: formData.emergencyFee ? parseFloat(formData.emergencyFee) : null,
-          service_fee: formData.serviceFee ? parseFloat(formData.serviceFee) : null,
+          pricing_info: formData.pricingInfo || null,
+          target_audience: formData.targetAudience || null,
+          tone: formData.tone,
+          call_transfer_number: formData.callTransferNumber || null,
+          call_transfer_enabled: !!formData.callTransferNumber,
+          business_hours: businessHours,
+          timezone: timezone,
           updated_at: new Date().toISOString()
         })
-        .eq('id', profile.id);
+        .eq('client_id', client.client_id);
 
-      if (profileError) {
-        throw profileError;
-      }
-
-      // Update voice_ai_clients with transfer number AND business hours if client exists
-      if (client) {
-        const { error: clientError } = await supabase
-          .from('voice_ai_clients')
-          .update({
-            call_transfer_number: formData.callTransferNumber || null,
-            call_transfer_enabled: !!formData.callTransferNumber,
-            business_hours: businessHours, // JSONB
-            timezone: timezone,
-            updated_at: new Date().toISOString()
-          })
-          .eq('client_id', client.client_id);
-
-        if (clientError) {
-          throw clientError;
-        }
+      if (clientError) {
+        throw clientError;
       }
 
       toast.success("Business details saved successfully!");
       setIsEditing(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving business details:', error);
       toast.error(`Failed to save: ${error.message}`);
     } finally {
@@ -284,77 +262,49 @@ export default function BusinessDetails() {
             </p>
           </div>
           <div className="space-y-4">
+            {/* Read-only: Business Name */}
             <div className="space-y-2">
-              <Label htmlFor="businessName">Business Name</Label>
-              {isEditing ? (
-                <Input
-                  id="businessName"
-                  value={formData.businessName}
-                  onChange={(e) => handleInputChange("businessName", e.target.value)}
-                />
-              ) : (
-                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
-                  {formData.businessName || "Not specified"}
-                </div>
-              )}
+              <Label>Business Name</Label>
+              <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-muted/30 text-sm text-muted-foreground">
+                {client?.business_name || "Not specified"}
+              </div>
             </div>
 
+            {/* Read-only: Industry */}
             <div className="space-y-2">
-              <Label htmlFor="businessType">Business Type / Industry</Label>
-              {isEditing ? (
-                <Input
-                  id="businessType"
-                  value={formData.businessType}
-                  onChange={(e) => handleInputChange("businessType", e.target.value)}
-                />
-              ) : (
-                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
-                  {formData.businessType || "Not specified"}
-                </div>
-              )}
+              <Label>Industry</Label>
+              <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-muted/30 text-sm text-muted-foreground">
+                {client?.industry || "Not specified"}
+              </div>
             </div>
 
+            {/* Read-only: Email */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="flex items-center gap-1">
+              <Label className="flex items-center gap-1">
                 <Mail className="h-4 w-4" />
                 Email Address
               </Label>
-              {isEditing ? (
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
-                />
-              ) : (
-                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
-                  {formData.email || "Not specified"}
-                </div>
-              )}
+              <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-muted/30 text-sm text-muted-foreground">
+                {profile?.email || "Not specified"}
+              </div>
             </div>
 
+            {/* Read-only: Phone */}
             <div className="space-y-2">
-              <Label htmlFor="phoneNumber" className="flex items-center gap-1">
+              <Label className="flex items-center gap-1">
                 <Phone className="h-4 w-4" />
-                Phone Number
+                Business Phone
               </Label>
-              {isEditing ? (
-                <Input
-                  id="phoneNumber"
-                  value={formData.phoneNumber}
-                  onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
-                />
-              ) : (
-                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
-                  {formData.phoneNumber || "Not specified"}
-                </div>
-              )}
+              <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-muted/30 text-sm text-muted-foreground">
+                {client?.phone_number || "Not specified"}
+              </div>
             </div>
 
+            {/* Editable: Website URL */}
             <div className="space-y-2">
               <Label htmlFor="websiteUrl" className="flex items-center gap-1">
                 <Globe className="h-4 w-4" />
-                Website URL <span className="text-muted-foreground font-normal">(Optional)</span>
+                Website URL
               </Label>
               {isEditing ? (
                 <Input
@@ -408,22 +358,6 @@ export default function BusinessDetails() {
               )}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="serviceArea">Service Area <span className="text-muted-foreground font-normal">(Optional - if applicable)</span></Label>
-              {isEditing ? (
-                <Textarea
-                  id="serviceArea"
-                  value={formData.serviceArea}
-                  onChange={(e) => handleInputChange("serviceArea", e.target.value)}
-                  rows={3}
-                  placeholder="Areas, suburbs, or regions you provide services to"
-                />
-              ) : (
-                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[80px]">
-                  {formData.serviceArea || "Not specified"}
-                </div>
-              )}
-            </div>
           </div>
         </motion.div>
 
@@ -472,65 +406,83 @@ export default function BusinessDetails() {
             </p>
           </div>
           <div className="space-y-4">
+            {/* Services Offered */}
             <div className="space-y-2">
-              <Label htmlFor="servicesOffered">Services Offered <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+              <Label htmlFor="servicesOffered">Services Offered</Label>
               {isEditing ? (
                 <Textarea
                   id="servicesOffered"
-                  value={formData.servicesOffered}
-                  onChange={(e) => handleInputChange("servicesOffered", e.target.value)}
-                  rows={3}
-                  placeholder="List the services your business provides"
+                  value={Array.isArray(formData.servicesOffered) ? formData.servicesOffered.join('\n') : ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, servicesOffered: e.target.value.split('\n').filter(s => s.trim()) }))}
+                  rows={4}
+                  placeholder="One service per line, e.g.&#10;AI Phone Receptionist&#10;Website Chat Widget"
                 />
               ) : (
-                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[80px]">
-                  {formData.servicesOffered || "Not specified"}
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm min-h-[100px] whitespace-pre-wrap">
+                  {Array.isArray(formData.servicesOffered) && formData.servicesOffered.length > 0
+                    ? formData.servicesOffered.join('\n')
+                    : "Not specified"}
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="serviceFee" className="flex items-center gap-1">
-                  <DollarSign className="h-4 w-4" />
-                  Regular Service Fee <span className="text-muted-foreground font-normal">(Optional)</span>
-                </Label>
-                {isEditing ? (
-                  <Input
-                    id="serviceFee"
-                    type="number"
-                    value={formData.serviceFee}
-                    onChange={(e) => handleInputChange("serviceFee", e.target.value)}
-                    placeholder="0.00"
-                  />
-                ) : (
-                  <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
-                    {formData.serviceFee ? `$${formData.serviceFee}` : "Not specified"}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="emergencyFee" className="flex items-center gap-1">
-                  <DollarSign className="h-4 w-4" />
-                  Emergency Fee <span className="text-muted-foreground font-normal">(Optional)</span>
-                </Label>
-                {isEditing ? (
-                  <Input
-                    id="emergencyFee"
-                    type="number"
-                    value={formData.emergencyFee}
-                    onChange={(e) => handleInputChange("emergencyFee", e.target.value)}
-                    placeholder="0.00"
-                  />
-                ) : (
-                  <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
-                    {formData.emergencyFee ? `$${formData.emergencyFee}` : "Not specified"}
-                  </div>
-                )}
-              </div>
+            {/* Pricing Info */}
+            <div className="space-y-2">
+              <Label htmlFor="pricingInfo">Pricing Information <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+              {isEditing ? (
+                <Input
+                  id="pricingInfo"
+                  value={formData.pricingInfo}
+                  onChange={(e) => handleInputChange("pricingInfo", e.target.value)}
+                  placeholder="e.g., From $39/month, Custom pricing"
+                />
+              ) : (
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
+                  {formData.pricingInfo || "Not specified"}
+                </div>
+              )}
             </div>
 
+            {/* Target Audience */}
+            <div className="space-y-2">
+              <Label htmlFor="targetAudience">Target Audience <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+              {isEditing ? (
+                <Input
+                  id="targetAudience"
+                  value={formData.targetAudience}
+                  onChange={(e) => handleInputChange("targetAudience", e.target.value)}
+                  placeholder="e.g., Small businesses, SaaS founders"
+                />
+              ) : (
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm">
+                  {formData.targetAudience || "Not specified"}
+                </div>
+              )}
+            </div>
+
+            {/* Tone */}
+            <div className="space-y-2">
+              <Label htmlFor="tone">Conversation Tone</Label>
+              {isEditing ? (
+                <select
+                  id="tone"
+                  value={formData.tone}
+                  onChange={(e) => handleInputChange("tone", e.target.value)}
+                  className="w-full h-10 bg-background border border-white/8 rounded-md px-3"
+                >
+                  <option value="professional">Professional</option>
+                  <option value="friendly">Friendly</option>
+                  <option value="casual">Casual</option>
+                  <option value="technical">Technical</option>
+                </select>
+              ) : (
+                <div className="p-3 rounded-lg border border-black/[0.05] dark:border-white/5 bg-black/[0.02] dark:bg-white/[0.02] text-sm capitalize">
+                  {formData.tone || "Not specified"}
+                </div>
+              )}
+            </div>
+
+            {/* Call Transfer Number */}
             <div className="space-y-2">
               <TooltipProvider>
                 <div className="flex items-center gap-2">

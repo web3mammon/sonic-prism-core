@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Calendar as BigCalendar, momentLocalizer, View } from 'react-big-calendar';
+import { useState, useEffect } from "react";
+import { Calendar as BigCalendar, momentLocalizer, View, SlotInfo } from 'react-big-calendar';
 import moment from 'moment';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { motion } from "framer-motion";
@@ -14,7 +14,9 @@ import {
   User,
   Phone,
   Mail,
-  X
+  X,
+  Loader2,
+  CheckCircle
 } from "lucide-react";
 import {
   Dialog,
@@ -23,60 +25,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
+import { useCurrentClient } from "@/hooks/useCurrentClient";
+import { toast } from "sonner";
+import BookingModal from "@/components/BookingModal";
 
 const localizer = momentLocalizer(moment);
-
-// Dummy appointment data for visual testing
-const dummyAppointments = [
-  {
-    id: '1',
-    title: 'Demo Call - Rachel Green',
-    start: new Date(2025, 9, 30, 10, 0),
-    end: new Date(2025, 9, 30, 11, 0),
-    customer_name: 'Rachel Green',
-    customer_email: 'rachel@example.com',
-    customer_phone: '+1-555-0123',
-    status: 'scheduled',
-    notes: 'Interested in premium package',
-    source: 'website' as const
-  },
-  {
-    id: '2',
-    title: 'Consultation - Ross Geller',
-    start: new Date(2025, 9, 30, 14, 0),
-    end: new Date(2025, 9, 30, 15, 30),
-    customer_name: 'Ross Geller',
-    customer_email: 'ross@example.com',
-    customer_phone: '+1-555-0456',
-    status: 'scheduled',
-    notes: 'Technical support inquiry',
-    source: 'phone' as const
-  },
-  {
-    id: '3',
-    title: 'Follow-up - Monica Bing',
-    start: new Date(2025, 9, 31, 9, 0),
-    end: new Date(2025, 9, 31, 9, 30),
-    customer_name: 'Monica Bing',
-    customer_email: 'monica@example.com',
-    customer_phone: '+1-555-0789',
-    status: 'completed',
-    notes: 'Discuss enterprise pricing',
-    source: 'website' as const
-  },
-  {
-    id: '4',
-    title: 'Discovery Call - Chandler Bing',
-    start: new Date(2025, 10, 1, 11, 0),
-    end: new Date(2025, 10, 1, 12, 0),
-    customer_name: 'Chandler Bing',
-    customer_email: 'chandler@example.com',
-    customer_phone: '+1-555-0321',
-    status: 'scheduled',
-    notes: 'New customer onboarding',
-    source: 'phone' as const
-  }
-];
 
 interface Appointment {
   id: string;
@@ -88,19 +42,108 @@ interface Appointment {
   customer_phone: string;
   status: 'scheduled' | 'completed' | 'cancelled' | 'no-show';
   notes: string;
-  source: 'phone' | 'website';
+  source: 'phone' | 'website' | 'manual';
+  date: string;
+  start_time: string;
+  end_time: string;
+  duration_minutes: number;
+  lead_id?: string;
+  lead?: {
+    lead_id: string;
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    status: string;
+    source: string;
+  } | null;
 }
 
 export default function Calendar() {
+  const { client, loading: clientLoading } = useCurrentClient();
   const [view, setView] = useState<View>('month');
   const [date, setDate] = useState(new Date());
-  const [appointments] = useState<Appointment[]>(dummyAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<{ start?: Date; end?: Date; date?: Date }>({});
+
+  // Fetch appointments from Supabase
+  useEffect(() => {
+    async function fetchAppointments() {
+      if (!client?.client_id) return;
+
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('appointments')
+          .select('*')
+          .eq('client_id', client.client_id)
+          .order('date', { ascending: true });
+
+        if (error) throw error;
+
+        // Fetch lead data for appointments with lead_id
+        const appointmentsWithLeads = await Promise.all(
+          (data || []).map(async (apt) => {
+            let leadData = null;
+
+            if (apt.lead_id) {
+              const { data: lead } = await supabase
+                .from('leads')
+                .select('lead_id, name, email, phone, status, source')
+                .eq('lead_id', apt.lead_id)
+                .single();
+
+              leadData = lead;
+            }
+
+            return {
+              id: apt.id,
+              title: `${apt.customer_name}`,
+              start: new Date(`${apt.date}T${apt.start_time}`),
+              end: new Date(`${apt.date}T${apt.end_time}`),
+              customer_name: apt.customer_name,
+              customer_email: apt.customer_email || '',
+              customer_phone: apt.customer_phone || '',
+              status: apt.status as 'scheduled' | 'completed' | 'cancelled' | 'no-show',
+              notes: apt.notes || '',
+              source: apt.source as 'phone' | 'website' | 'manual',
+              date: apt.date,
+              start_time: apt.start_time,
+              end_time: apt.end_time,
+              duration_minutes: apt.duration_minutes,
+              lead_id: apt.lead_id,
+              lead: leadData,
+            };
+          })
+        );
+
+        setAppointments(appointmentsWithLeads);
+      } catch (error) {
+        console.error('Error fetching appointments:', error);
+        toast.error('Failed to load appointments');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchAppointments();
+  }, [client?.client_id]);
 
   const handleSelectEvent = (event: any) => {
     setSelectedAppointment(event);
     setIsDetailsOpen(true);
+  };
+
+  const handleSelectSlot = (slotInfo: SlotInfo) => {
+    setSelectedSlot({
+      start: slotInfo.start,
+      end: slotInfo.end,
+      date: slotInfo.start
+    });
+    setIsBookingModalOpen(true);
   };
 
   const handleNavigate = (newDate: Date) => {
@@ -111,17 +154,91 @@ export default function Calendar() {
     setView(newView);
   };
 
+  const handleNewAppointment = () => {
+    setSelectedAppointment(null);
+    setSelectedSlot({ date: new Date() });
+    setIsBookingModalOpen(true);
+  };
+
+  const handleEditAppointment = () => {
+    setIsDetailsOpen(false);
+    setIsBookingModalOpen(true);
+  };
+
+  const handleSaveAppointment = (newAppointment: any) => {
+    // Transform and add/update in state
+    const transformed = {
+      id: newAppointment.id,
+      title: `${newAppointment.customer_name}`,
+      start: new Date(`${newAppointment.date}T${newAppointment.start_time}`),
+      end: new Date(`${newAppointment.date}T${newAppointment.end_time}`),
+      customer_name: newAppointment.customer_name,
+      customer_email: newAppointment.customer_email || '',
+      customer_phone: newAppointment.customer_phone || '',
+      status: newAppointment.status,
+      notes: newAppointment.notes || '',
+      source: newAppointment.source,
+      date: newAppointment.date,
+      start_time: newAppointment.start_time,
+      end_time: newAppointment.end_time,
+      duration_minutes: newAppointment.duration_minutes,
+      lead_id: newAppointment.lead_id,
+    };
+
+    setAppointments(prev => {
+      const existingIndex = prev.findIndex(a => a.id === transformed.id);
+      if (existingIndex >= 0) {
+        // Update existing
+        const updated = [...prev];
+        updated[existingIndex] = transformed;
+        return updated;
+      } else {
+        // Add new
+        return [...prev, transformed];
+      }
+    });
+  };
+
+  const handleDeleteAppointment = (id: string) => {
+    setAppointments(prev => prev.filter(a => a.id !== id));
+  };
+
+  const handleMarkComplete = async () => {
+    if (!selectedAppointment) return;
+
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: 'completed' })
+        .eq('id', selectedAppointment.id);
+
+      if (error) throw error;
+
+      toast.success('Appointment marked as completed');
+
+      // Update in state
+      setAppointments(prev =>
+        prev.map(apt =>
+          apt.id === selectedAppointment.id
+            ? { ...apt, status: 'completed' as const }
+            : apt
+        )
+      );
+      setIsDetailsOpen(false);
+    } catch (error) {
+      console.error('Error updating appointment:', error);
+      toast.error('Failed to update appointment');
+    }
+  };
+
+  const handleViewToday = () => {
+    setDate(new Date());
+  };
+
   // Custom event style function - uses red/primary color scheme
   const eventStyleGetter = (event: any) => {
-    let backgroundColor = 'hsl(var(--primary))'; // primary red for scheduled
-
-    if (event.status === 'completed') {
-      backgroundColor = '#10b981'; // green
-    } else if (event.status === 'cancelled') {
-      backgroundColor = '#ef4444'; // red
-    } else if (event.status === 'no-show') {
-      backgroundColor = '#f59e0b'; // orange
-    }
+    // All appointments use the same red/primary color tone for simplicity
+    const backgroundColor = 'hsl(var(--primary))';
 
     return {
       style: {
@@ -141,6 +258,22 @@ export default function Calendar() {
     .filter(apt => apt.start >= new Date() && apt.status === 'scheduled')
     .sort((a, b) => a.start.getTime() - b.start.getTime())
     .slice(0, 3);
+
+  if (clientLoading || loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!client) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-muted-foreground">Client not found</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 p-6 font-manrope relative">
@@ -166,7 +299,7 @@ export default function Calendar() {
             Manage your AI-booked appointments
           </p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={handleNewAppointment}>
           <Plus className="h-4 w-4" />
           New Appointment
         </Button>
@@ -255,6 +388,8 @@ export default function Calendar() {
             date={date}
             onNavigate={handleNavigate}
             onSelectEvent={handleSelectEvent}
+            onSelectSlot={handleSelectSlot}
+            selectable
             eventPropGetter={eventStyleGetter}
             views={['month', 'week', 'day']}
           />
@@ -309,11 +444,21 @@ export default function Calendar() {
           <div className="rounded-2xl border border-border bg-card p-4">
             <h3 className="font-medium mb-4">Quick Actions</h3>
             <div className="space-y-2">
-              <Button variant="outline" className="w-full justify-start gap-2" size="sm">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                size="sm"
+                onClick={handleNewAppointment}
+              >
                 <Plus className="h-4 w-4" />
                 New Appointment
               </Button>
-              <Button variant="outline" className="w-full justify-start gap-2" size="sm">
+              <Button
+                variant="outline"
+                className="w-full justify-start gap-2"
+                size="sm"
+                onClick={handleViewToday}
+              >
                 <CalendarIcon className="h-4 w-4" />
                 View Today
               </Button>
@@ -388,6 +533,32 @@ export default function Calendar() {
               </div>
             )}
 
+            {/* Lead Information */}
+            {selectedAppointment?.lead && (
+              <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                  <User className="h-4 w-4 text-primary" />
+                  Linked Lead
+                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Name:</span>
+                    <span className="text-sm font-medium">{selectedAppointment.lead.name || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Status:</span>
+                    <Badge variant="outline" className="text-xs">
+                      {selectedAppointment.lead.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Source:</span>
+                    <span className="text-sm capitalize">{selectedAppointment.lead.source}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Notes */}
             {selectedAppointment?.notes && (
               <div className="p-3 rounded-lg bg-card border border-border">
@@ -408,19 +579,47 @@ export default function Calendar() {
 
             {/* Actions */}
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" size="sm">
-                Reschedule
-              </Button>
-              <Button variant="outline" className="flex-1" size="sm">
+              {selectedAppointment?.status === 'scheduled' && (
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  size="sm"
+                  onClick={handleMarkComplete}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Mark Complete
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                className="flex-1"
+                size="sm"
+                onClick={handleEditAppointment}
+              >
                 Edit
-              </Button>
-              <Button variant="destructive" size="sm">
-                <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Booking Modal */}
+      <BookingModal
+        isOpen={isBookingModalOpen}
+        onClose={() => {
+          setIsBookingModalOpen(false);
+          setSelectedAppointment(null);
+          setSelectedSlot({});
+        }}
+        onSave={handleSaveAppointment}
+        onDelete={handleDeleteAppointment}
+        selectedDate={selectedSlot.date}
+        selectedSlotStart={selectedSlot.start}
+        selectedSlotEnd={selectedSlot.end}
+        editingAppointment={selectedAppointment}
+        clientId={client.client_id}
+        userId={client.user_id}
+      />
 
       {/* Custom Calendar Styles */}
       <style>{`
@@ -435,6 +634,16 @@ export default function Calendar() {
           font-size: 14px;
           color: hsl(var(--muted-foreground));
           border-bottom: 1px solid hsl(var(--border));
+        }
+
+        /* Week/Day view - Date headers with better spacing */
+        .calendar-container .rbc-time-header-cell .rbc-header {
+          padding: 16px 6px 36px 6px !important;
+          font-size: 13px;
+        }
+
+        .calendar-container .rbc-allday-cell .rbc-header {
+          padding-bottom: 36px !important;
         }
 
         .calendar-container .rbc-month-view {
@@ -520,23 +729,34 @@ export default function Calendar() {
         .calendar-container .rbc-time-view,
         .calendar-container .rbc-time-header {
           border: none;
-          border-top: 1px solid hsl(var(--border));
+          border-top: 1px solid hsl(var(--border) / 0.5);
         }
 
         .calendar-container .rbc-time-content {
           border-top: none;
         }
 
+        /* Time labels - smaller, refined font */
         .calendar-container .rbc-time-slot {
           border-top: 1px solid hsl(var(--border) / 0.5);
         }
 
+        .calendar-container .rbc-label {
+          font-size: 11px;
+          color: hsl(var(--muted-foreground));
+          padding: 0 8px;
+        }
+
         .calendar-container .rbc-timeslot-group {
-          border-left: 1px solid hsl(var(--border));
+          border-left: 1px solid hsl(var(--border) / 0.5);
+        }
+
+        .rbc-timeslot-group {
+          opacity: 0.3;
         }
 
         .calendar-container .rbc-day-slot .rbc-time-slot {
-          border-top: 1px solid hsl(var(--border) / 0.3);
+          border-top: 1px solid hsl(var(--border) / 0.5);
         }
 
         .calendar-container .rbc-current-time-indicator {

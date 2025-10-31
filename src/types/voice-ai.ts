@@ -20,6 +20,14 @@ export interface VoiceAIClient {
   business_hours?: any;  // JSONB - business hours schedule
   timezone?: string;  // IANA timezone
 
+  // Business context fields (added November 2025)
+  website_url?: string;
+  business_address?: string;
+  services_offered?: string[];  // JSONB array
+  pricing_info?: string;
+  target_audience?: string;
+  tone?: string;
+
   // Trial tracking
   trial_calls?: number;
   trial_calls_used?: number;

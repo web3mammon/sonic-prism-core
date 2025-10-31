@@ -17,6 +17,7 @@ export default function Login() {
   const [resetMode, setResetMode] = useState(false);
   const [clientData, setClientData] = useState<any>(null);
   const [fetchingClient, setFetchingClient] = useState(true);
+  const [noClientError, setNoClientError] = useState(false);
 
   // Fetch client data when user is authenticated
   useEffect(() => {
@@ -29,19 +30,25 @@ export default function Login() {
       try {
         const { data, error } = await supabase
           .from('voice_ai_clients')
-          .select('region, industry, clientname, status')
+          .select('region, industry, business_name, status')
           .eq('user_id', user.id)
-          .eq('status', 'active')
           .single();
 
         if (error) {
-          console.error('Error fetching client:', error);
+          console.error('[Login] Error fetching client:', error);
           setClientData(null);
-        } else {
+          setNoClientError(true);
+        } else if (data) {
+          console.log('[Login] Found client:', data);
           setClientData(data);
+          setNoClientError(false);
+        } else {
+          console.log('[Login] No client found for user:', user.id);
+          setClientData(null);
+          setNoClientError(true);
         }
       } catch (error) {
-        console.error('Error fetching client:', error);
+        console.error('[Login] Exception fetching client:', error);
         setClientData(null);
       } finally {
         setFetchingClient(false);
@@ -51,36 +58,19 @@ export default function Login() {
     fetchClientData();
   }, [user?.id]);
 
-  // Redirect if already authenticated
-  if (user && profile) {
-    // Still loading client data
-    if (fetchingClient) {
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
-      );
-    }
+  // Show loading while checking for client
+  if (user && profile && fetchingClient) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
-    const extendedProfile = profile as any;
-
-    // If business setup not complete, redirect to onboarding
-    if (!extendedProfile.onboarding_completed) {
-      return <Navigate to="/onboarding" replace />;
-    }
-
-    // If no client exists, show error and redirect to onboarding
-    if (!clientData) {
-      toast({
-        title: "No active client found",
-        description: "Please complete onboarding to create your client.",
-        variant: "destructive",
-      });
-      return <Navigate to="/onboarding" replace />;
-    }
-
-    // If setup is complete, redirect to actual dashboard
-    const dashboardUrl = `/${clientData.region}/${clientData.industry}/${clientData.clientname}`;
+  // Redirect if already authenticated AND has client
+  if (user && profile && !fetchingClient && clientData) {
+    const dashboardUrl = `/${clientData.region.toLowerCase()}/${clientData.industry}/${clientData.business_name.toLowerCase()}`;
+    console.log('[Login] Redirecting to dashboard:', dashboardUrl);
     return <Navigate to={dashboardUrl} replace />;
   }
 
@@ -158,6 +148,14 @@ export default function Login() {
         </CardHeader>
 
         <CardContent>
+          {/* Show error only if logged in but no client */}
+          {user && profile && !fetchingClient && noClientError && (
+            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
+              <p className="font-medium">Setup incomplete</p>
+              <p className="text-xs mt-1">Please <a href="/onboarding" className="underline font-medium">complete your setup</a> to access the dashboard.</p>
+            </div>
+          )}
+
           {resetMode ? (
             // Forgot Password Form
             <form onSubmit={handleForgotPassword} className="space-y-6">

@@ -579,7 +579,18 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
           system_prompt: session.client.system_prompt,
           channel_type: 'phone',
           business_hours: session.client.business_hours,
-          timezone: session.client.timezone
+          timezone: session.client.timezone,
+          // Business context fields (added November 2025)
+          website_url: session.client.website_url,
+          business_address: session.client.business_address,
+          services_offered: session.client.services_offered,
+          pricing_info: session.client.pricing_info,
+          target_audience: session.client.target_audience,
+          tone: session.client.tone,
+          // Call transfer fields
+          call_transfer_enabled: session.client.call_transfer_enabled,
+          call_transfer_number: session.client.call_transfer_number,
+          email: session.client.email
         },
         session.voiceProfile
       )
@@ -688,10 +699,253 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
 
     const aiResponse = fullResponse || 'I apologize, I didn\'t catch that.';
 
+    // ======================================
+    // CHECK FOR CALL TRANSFER REQUEST
+    // ======================================
+    if (aiResponse.includes('INITIATING_TRANSFER')) {
+      console.log('[Transfer] AI requested call transfer');
+
+      if (!session.client.call_transfer_enabled) {
+        console.warn('[Transfer] ⚠️  Transfer not enabled for this client');
+        // Remove the transfer marker from response and continue
+        const cleanedResponse = aiResponse.replace(/INITIATING_TRANSFER/g, '').trim();
+        // Continue with cleaned response
+      } else if (!session.client.call_transfer_number) {
+        console.warn('[Transfer] ⚠️  No transfer number configured - using email fallback');
+
+        // Get business email (from user profile)
+        const businessEmail = session.client.email || `hello@${session.client.business_name.toLowerCase().replace(/\s+/g, '')}.com`;
+
+        // Generate graceful fallback message
+        const fallbackMessage = `Unfortunately, there are no available human executives right now. Please drop us an email at ${businessEmail} and we'll get back to you as soon as possible.`;
+
+        console.log('[Transfer] Fallback email message:', fallbackMessage);
+
+        // Send fallback message via TTS
+        await generateAndStreamTTS(
+          callSid,
+          fallbackMessage,
+          socket,
+          audioChunkIndex++
+        );
+
+        // Log in conversation
+        session.conversationLog.push({
+          speaker: 'assistant',
+          content: fallbackMessage,
+          timestamp: new Date().toISOString(),
+          message_type: 'transfer_fallback'
+        });
+
+        // Log failed transfer attempt in database
+        try {
+          const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          );
+
+          await supabaseClient.from('agent_transfers').insert({
+            call_sid: session.callSid,
+            client_id: session.client.client_id,
+            transcript: session.conversationHistory.map(m => `${m.role}: ${m.content}`).join('\n'),
+            transfer_number: 'NOT_SET',
+            transfer_reason: 'Customer requested transfer but no number configured',
+            status: 'failed',
+            metadata: {
+              business_name: session.client.business_name,
+              fallback_email: businessEmail,
+              transfer_enabled: session.client.call_transfer_enabled,
+              has_number: false
+            }
+          });
+        } catch (logError) {
+          console.error('[Transfer] Failed to log transfer attempt:', logError);
+        }
+
+        // Continue conversation
+        session.isProcessing = false;
+        return;
+
+      } else {
+        console.log('[Transfer] ✅ Calling agent-transfer function...');
+
+        try {
+          // Get Supabase client
+          const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          );
+
+          // Call agent-transfer edge function
+          const { data, error } = await supabaseClient.functions.invoke('agent-transfer', {
+            body: {
+              call_sid: session.callSid,
+              client_id: session.client.client_id,
+              transcript: session.conversationHistory
+                .map(m => `${m.role}: ${m.content}`)
+                .join('\n')
+            }
+          });
+
+          if (error) {
+            console.error('[Transfer] ❌ Error calling agent-transfer:', error);
+            // Let AI continue conversation if transfer fails
+            await generateAndStreamTTS(
+              callSid,
+              "I apologize, but I'm having trouble transferring you right now. Let me continue helping you directly.",
+              socket,
+              audioChunkIndex++
+            );
+          } else {
+            console.log('[Transfer] ✅ Transfer initiated successfully:', data);
+
+            // Log conversation before transfer
+            session.conversationLog.push({
+              speaker: 'system',
+              content: 'Call transferred to human agent',
+              timestamp: new Date().toISOString(),
+              message_type: 'transfer'
+            });
+
+            // WebSocket will be closed by Twilio when call updates
+            // No need to manually close here
+            console.log('[Transfer] ✅ Transfer in progress, WebSocket will disconnect automatically');
+          }
+
+          // Stop processing, transfer is happening
+          session.isProcessing = false;
+          return;
+
+        } catch (transferError) {
+          console.error('[Transfer] ❌ Transfer function invocation failed:', transferError);
+          // Continue conversation if transfer completely fails
+        }
+      }
+    }
+
+    // ======================================
+    // CHECK FOR APPOINTMENT BOOKING REQUEST
+    // ======================================
+    if (aiResponse.includes('BOOKING_APPOINTMENT')) {
+      console.log('[Booking] AI requested appointment booking');
+
+      try {
+        // Extract booking details from AI response
+        const bookingSection = aiResponse.split('BOOKING_APPOINTMENT')[1];
+        const dateMatch = bookingSection.match(/DATE:\s*(\d{4}-\d{2}-\d{2})/);
+        const startTimeMatch = bookingSection.match(/START_TIME:\s*(\d{2}:\d{2})/);
+        const endTimeMatch = bookingSection.match(/END_TIME:\s*(\d{2}:\d{2})/);
+        const nameMatch = bookingSection.match(/CUSTOMER_NAME:\s*(.+)/);
+        const phoneMatch = bookingSection.match(/CUSTOMER_PHONE:\s*(.+)/);
+        const emailMatch = bookingSection.match(/CUSTOMER_EMAIL:\s*(.+)/);
+        const serviceMatch = bookingSection.match(/SERVICE:\s*(.+)/);
+        const notesMatch = bookingSection.match(/NOTES:\s*(.+)/);
+
+        if (dateMatch && startTimeMatch && endTimeMatch && nameMatch) {
+          const date = dateMatch[1].trim();
+          const startTime = startTimeMatch[1].trim();
+          const endTime = endTimeMatch[1].trim();
+          const customerName = nameMatch[1].trim();
+          const customerPhone = phoneMatch ? phoneMatch[1].trim() : session.caller_number || null;
+          const customerEmail = emailMatch ? emailMatch[1].trim() : null;
+          const service = serviceMatch ? serviceMatch[1].trim() : 'General appointment';
+          const notes = notesMatch ? notesMatch[1].trim() : '';
+
+          console.log('[Booking] Parsed booking details:', {
+            date,
+            startTime,
+            endTime,
+            customerName,
+            customerPhone,
+            service
+          });
+
+          // Get Supabase client
+          const supabaseClient = createClient(
+            Deno.env.get('SUPABASE_URL') ?? '',
+            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+          );
+
+          // Call calendar-integration function to create booking
+          const { data: bookingData, error: bookingError } = await supabaseClient.functions.invoke('calendar-integration', {
+            body: {
+              action: 'create_booking',
+              client_id: session.client.client_id,
+              customer_name: customerName,
+              customer_phone: customerPhone,
+              customer_email: customerEmail,
+              start_time: `${date}T${startTime}:00`,
+              end_time: `${date}T${endTime}:00`,
+              service_type: service,
+              notes: notes,
+              session_id: session.callSid,
+              source: 'phone',
+              lead_id: session.lead_id || null
+            }
+          });
+
+          if (bookingError) {
+            console.error('[Booking] ❌ Error creating appointment:', bookingError);
+
+            // Notify customer of booking failure
+            const errorMessage = "I apologize, but I'm having trouble scheduling your appointment right now. Let me take down your information and someone from our team will call you back to confirm your booking.";
+            await generateAndStreamTTS(
+              callSid,
+              errorMessage,
+              socket,
+              audioChunkIndex++
+            );
+
+            session.conversationLog.push({
+              speaker: 'assistant',
+              content: errorMessage,
+              timestamp: new Date().toISOString(),
+              message_type: 'booking_error'
+            });
+          } else {
+            console.log('[Booking] ✅ Appointment created successfully:', bookingData);
+
+            // Confirm booking to customer
+            const confirmMessage = `Perfect! I've scheduled your appointment for ${service} on ${date} at ${startTime}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
+
+            // Remove BOOKING_APPOINTMENT marker and booking details from response
+            const cleanedResponse = aiResponse.split('BOOKING_APPOINTMENT')[0].trim();
+            const finalResponse = cleanedResponse + ' ' + confirmMessage;
+
+            await generateAndStreamTTS(
+              callSid,
+              confirmMessage,
+              socket,
+              audioChunkIndex++
+            );
+
+            // Log booking in conversation
+            session.conversationLog.push({
+              speaker: 'assistant',
+              content: confirmMessage,
+              timestamp: new Date().toISOString(),
+              message_type: 'booking_confirmation',
+              metadata: bookingData
+            });
+          }
+        } else {
+          console.warn('[Booking] ⚠️  Missing required booking details in AI response');
+        }
+      } catch (bookingError) {
+        console.error('[Booking] ❌ Booking processing failed:', bookingError);
+      }
+    }
+
     // Update conversation history
+    // Remove booking markers from response before storing
+    const cleanedAiResponse = aiResponse
+      .replace(/BOOKING_APPOINTMENT[\s\S]*?(?=\n\n|$)/g, '')
+      .replace(/INITIATING_TRANSFER/g, '')
+      .trim();
+
     session.conversationHistory.push(
       { role: 'user', content: userInput },
-      { role: 'assistant', content: aiResponse }
+      { role: 'assistant', content: cleanedAiResponse }
     );
 
     session.conversationLog.push({

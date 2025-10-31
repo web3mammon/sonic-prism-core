@@ -82,6 +82,12 @@ export default function AuthCallback() {
           system_prompt: onboardingData.system_prompt || '',
           channel_type: onboardingData.channel_type || 'phone',
           voice_id: onboardingData.voice_id,
+          // NEW: Pass all business context fields
+          website_url: onboardingData.website_url || '',
+          services_offered: onboardingData.services_offered || [],
+          pricing_info: onboardingData.pricing_info || '',
+          target_audience: onboardingData.target_audience || '',
+          tone: onboardingData.tone || 'professional',
         }
       });
 

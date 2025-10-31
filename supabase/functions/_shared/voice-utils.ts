@@ -21,6 +21,17 @@ interface ClientData {
   channel_type?: 'phone' | 'website' | 'both';
   business_hours?: any; // JSONB with business hours by day
   timezone?: string; // IANA timezone (e.g., 'America/New_York')
+  // Business context fields (added November 2025)
+  website_url?: string;
+  business_address?: string;
+  services_offered?: string[]; // JSONB array
+  pricing_info?: string;
+  target_audience?: string;
+  tone?: string;
+  // Call transfer fields
+  call_transfer_enabled?: boolean;
+  call_transfer_number?: string;
+  email?: string;
 }
 
 /**
@@ -114,9 +125,57 @@ export function buildVoiceOptimizedPrompt(
     ? 'You are speaking with a visitor on our website who initiated a chat.'
     : 'You are speaking with a customer who either called us or is chatting on our website.';
 
-  // Extract business context from system_prompt if available
-  const businessContext = client.system_prompt ||
-    `${client.business_name} is a business in the ${client.industry} industry.`;
+  // Build comprehensive business context from all available fields
+  let businessContext = '';
+
+  // Start with system_prompt if available (contains AI-generated context from onboarding)
+  if (client.system_prompt) {
+    businessContext = client.system_prompt;
+  } else {
+    businessContext = `${client.business_name} is a business in the ${client.industry} industry.`;
+  }
+
+  // ADD RICH BUSINESS CONTEXT (always include, even if system_prompt exists)
+  // This ensures LLM always has latest info even if system_prompt is outdated
+  let enrichedContext = '';
+
+  if (client.website_url) {
+    enrichedContext += `\n\nWebsite: ${client.website_url}`;
+  }
+
+  if (client.business_address) {
+    enrichedContext += `\n\nPhysical Location: ${client.business_address}`;
+  }
+
+  if (client.services_offered && Array.isArray(client.services_offered) && client.services_offered.length > 0) {
+    enrichedContext += `\n\nServices We Offer:`;
+    client.services_offered.forEach((service, index) => {
+      enrichedContext += `\n${index + 1}. ${service}`;
+    });
+  }
+
+  if (client.pricing_info) {
+    enrichedContext += `\n\nPricing: ${client.pricing_info}`;
+  }
+
+  if (client.target_audience) {
+    enrichedContext += `\n\nOur Target Customers: ${client.target_audience}`;
+  }
+
+  if (client.tone) {
+    const toneGuidance = client.tone === 'professional' ? 'Maintain a professional, courteous tone.'
+      : client.tone === 'friendly' ? 'Be warm, friendly, and approachable - like talking to a friend.'
+      : client.tone === 'casual' ? 'Keep it casual and relaxed - no need to be overly formal.'
+      : client.tone === 'technical' ? 'Use industry-specific terminology when appropriate, be precise and detailed.'
+      : 'Maintain a balanced, professional tone.';
+
+    enrichedContext += `\n\nConversation Tone: ${toneGuidance}`;
+  }
+
+  // Append enriched context to business context
+  if (enrichedContext) {
+    businessContext += enrichedContext;
+  }
 
   // Get real-time datetime and business hours context
   const dateTimeContext = getCurrentDateTimeContext(client);
@@ -228,6 +287,124 @@ You: "Oh man, I totally understand that must be frustrating. Let me see what I c
 
 Customer: "Can you do X, Y, and Z?"
 You: "Hmm, yeah, we can definitely handle X and Y. Let me check on Z real quick... Yeah, we can do that too. When would you need this done?"
+
+CALL TRANSFER CAPABILITY:
+${client.call_transfer_enabled ? `
+You can transfer this phone call to a human agent when needed.
+
+Transfer the call when:
+- Customer explicitly requests: "I want to speak to a person", "transfer me", "talk to a human", "speak to someone"
+- You cannot resolve their issue after 2-3 genuine attempts
+- Customer is frustrated, angry, or expressing strong negative emotion
+- Technical issue is clearly beyond your capabilities
+- High-value opportunity that deserves personal attention
+
+How to transfer:
+1. When you decide to transfer, say to the customer: "Let me connect you to our team right away. One moment please."
+2. Then respond with EXACTLY this marker: "INITIATING_TRANSFER"
+3. The transfer will happen automatically after this
+
+IMPORTANT:
+- Be natural about it: "Let me get someone who can help you better with this"
+- Don't say "I'm just an AI" - stay in character as ${voiceProfile.name}
+- After transfer marker, the call will be forwarded to ${client.business_name}'s team
+- If customer declines transfer, continue helping them yourself
+
+FALLBACK (if transfer number not configured):
+If transfer fails (no number available), you will automatically tell customer:
+"Unfortunately, there are no available human executives right now. Please drop us an email at ${client.email || 'hello@' + client.business_name.toLowerCase().replace(/\s+/g, '') + '.com'} and we'll get back to you as soon as possible."
+` : `
+CALL TRANSFER:
+Call transfer is not enabled for this business. If customer requests to speak with someone else or a manager:
+- Stay professional and helpful
+- Say: "I'm the main point of contact for ${client.business_name}. Let me do my best to help you!"
+- Double down on being extra helpful
+- If truly stuck, say: "Please email us at ${client.email || 'hello@' + client.business_name.toLowerCase().replace(/\s+/g, '') + '.com'} and we'll have our team follow up with you directly."
+`}
+
+APPOINTMENT BOOKING:
+You can book appointments for customers! Here's how:
+
+TODAY'S DATE FOR REFERENCE (REAL-TIME):
+${(() => {
+  const now = new Date();
+  const timezone = client.timezone || 'America/New_York';
+
+  // Get date in client's timezone
+  const dateStr = now.toLocaleDateString('en-CA', { timeZone: timezone }); // YYYY-MM-DD
+
+  // Get day of week in client's timezone
+  const dayOfWeek = now.toLocaleDateString('en-US', {
+    timeZone: timezone,
+    weekday: 'long'
+  });
+
+  return `Current date: ${dateStr} (${dayOfWeek})
+Current time: ${now.toLocaleTimeString('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  })}
+Timezone: ${timezone}
+
+Use this to calculate relative dates:
+- "tomorrow" = ${new Date(now.getTime() + 86400000).toLocaleDateString('en-CA', { timeZone: timezone })}
+- "today" = ${dateStr}
+- When customer says "next Monday", "this Friday", etc., calculate from today's date above`;
+})()}
+
+Business Hours:
+${Object.entries(client.business_hours || {}).map(([day, hours]: [string, any]) => {
+  if (hours.closed) {
+    return `- ${day.charAt(0).toUpperCase() + day.slice(1)}: CLOSED`;
+  }
+  return `- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${hours.open} - ${hours.close}`;
+}).join('\n')}
+
+When customer wants to book an appointment:
+1. Ask for their preferred date and time
+2. Check if the time falls within business hours
+3. Confirm their contact details (name, phone, email)
+4. Ask what service/reason for the appointment
+5. When you have all info, respond with this EXACT marker: "BOOKING_APPOINTMENT"
+6. Then immediately after, provide booking details in this format:
+   DATE: YYYY-MM-DD
+   START_TIME: HH:MM (24-hour format)
+   END_TIME: HH:MM (24-hour format)
+   CUSTOMER_NAME: [name]
+   CUSTOMER_PHONE: [phone]
+   CUSTOMER_EMAIL: [email]
+   SERVICE: [service/reason]
+   NOTES: [any additional notes]
+
+Example conversation:
+Customer: "I'd like to book an appointment for tomorrow at 2pm"
+You: "Perfect! I can help you with that. What's the appointment for?"
+Customer: "A haircut"
+You: "Great! Just need to confirm your contact info. What's your name?"
+Customer: "John Smith"
+You: "Thanks John! And what's the best phone number to reach you?"
+Customer: "555-1234"
+You: "Perfect! And your email address?"
+Customer: "john@email.com"
+You: "Excellent! I'm booking your haircut appointment for tomorrow at 2pm. Let me get that scheduled for you."
+BOOKING_APPOINTMENT
+DATE: ${new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+START_TIME: 14:00
+END_TIME: 15:00
+CUSTOMER_NAME: John Smith
+CUSTOMER_PHONE: 555-1234
+CUSTOMER_EMAIL: john@email.com
+SERVICE: Haircut
+NOTES: Customer requested 2pm appointment
+
+Important:
+- Only book during business hours shown above
+- Default appointment duration is 60 minutes unless customer specifies
+- Always confirm the date and time verbally before booking
+- Be conversational and natural - don't sound robotic
+- If a time is outside business hours, suggest the nearest available time
 
 REMEMBER:
 - You are ${voiceProfile.name}, a real person having a real conversation

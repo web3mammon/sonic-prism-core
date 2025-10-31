@@ -385,7 +385,13 @@ export default function Onboarding() {
               system_prompt: state.system_prompt || '',
               channel_type: state.channel_type || 'phone',
               voice_id: state.voice_id,
-              phone_number: phoneNumber || '', // Include for client-provisioning
+              phone_number: phoneNumber || '',
+              // NEW: Business context fields
+              website_url: state.website_url || '',
+              services_offered: state.analysis?.services || [],
+              pricing_info: state.analysis?.pricing || '',
+              target_audience: state.analysis?.target_audience || '',
+              tone: state.analysis?.tone || 'professional',
             }
           }
         }
@@ -922,10 +928,10 @@ export default function Onboarding() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                 {voices.map((voice) => (
-                  <button
+                  <div
                     key={voice.voice_id}
                     onClick={() => updateState({ voice_id: voice.voice_id })}
-                    className={`relative rounded-2xl border-2 p-6 text-left transition-all hover:scale-105 ${
+                    className={`relative rounded-2xl border-2 p-6 text-left transition-all hover:scale-105 cursor-pointer ${
                       state.voice_id === voice.voice_id
                         ? 'border-primary bg-primary/5 shadow-lg'
                         : 'border-white/10 hover:border-white/20'
@@ -983,7 +989,7 @@ export default function Onboarding() {
                         <Check className="w-4 h-4 text-black" />
                       </div>
                     )}
-                  </button>
+                  </div>
                 ))}
 
                 {/* Coming Soon Card */}
