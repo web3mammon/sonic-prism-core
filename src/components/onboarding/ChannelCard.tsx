@@ -1,9 +1,10 @@
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { ArrowRight } from "lucide-react";
+import { ReactNode } from "react";
 
 interface ChannelCardProps {
-  icon: string;
+  icon: ReactNode;
   title: string;
   price: string;
   badge?: string;
@@ -34,7 +35,7 @@ export function ChannelCard({
         {/* Badge */}
         {badge && (
           <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-            <Badge className="bg-primary/10 text-primary border-primary/30 px-3 py-1">
+            <Badge className="bg-primary text-white border-primary px-3 py-1">
               {badge}
             </Badge>
           </div>

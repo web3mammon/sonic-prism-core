@@ -6,7 +6,7 @@ import { ChannelType } from "@/contexts/OnboardingContext";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { ModernButton } from "@/components/ui/modern-button";
-import { Loader2, Edit2, Check, Eye, EyeOff, Sparkles } from "lucide-react";
+import { Loader2, Edit2, Check, Eye, EyeOff, Sparkles, MessageSquare, Zap, Phone, Mail } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -574,10 +574,10 @@ export default function Onboarding() {
             {/* Channel Cards */}
             <div className="grid md:grid-cols-3 gap-6 mb-8">
               <ChannelCard
-                icon="💬"
+                icon={<MessageSquare className="w-10 h-10 text-primary" />}
                 title="Handle Website Visitors"
                 price="$39"
-                badge="⭐ Popular for SaaS"
+                badge="Popular for Online Businesses"
                 features={[
                   "Chat widget on your site",
                   "Copy one line of code—takes 30 seconds",
@@ -589,8 +589,8 @@ export default function Onboarding() {
               />
 
               <ChannelCard
-                icon="🚀"
-                title="Handle Both"
+                icon={<Zap className="w-10 h-10 text-primary" />}
+                title="Handle Both Phone Calls and Website Visitors"
                 price="$69"
                 badge="Best Value - Save $19"
                 features={[
@@ -604,9 +604,10 @@ export default function Onboarding() {
               />
 
               <ChannelCard
-                icon="📞"
+                icon={<Phone className="w-10 h-10 text-primary" />}
                 title="Handle Phone Calls"
                 price="$49"
+                badge="Popular for Local Businesses"
                 features={[
                   "Use your existing number or get a new one",
                   "AI answers 24/7—no more missed calls",
@@ -1239,7 +1240,7 @@ export default function Onboarding() {
                 className="flex justify-center"
               >
                 <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center border border-primary/20">
-                  <span className="text-6xl">📧</span>
+                  <Mail className="w-12 h-12 text-primary" />
                 </div>
               </motion.div>
 
@@ -1272,7 +1273,7 @@ export default function Onboarding() {
               >
                 <div className="p-4 rounded-lg bg-muted/50 border border-border/50 text-left">
                   <p className="text-sm text-muted-foreground">
-                    <span className="font-medium text-foreground">💡 Tip:</span> Check your spam folder if you don't see the email within a few minutes.
+                    <span className="font-medium text-foreground">Tip:</span> Check your spam folder if you don't see the email within a few minutes.
                   </p>
                 </div>
                 <p className="text-xs text-muted-foreground">
@@ -1303,14 +1304,14 @@ export default function Onboarding() {
 
                 <div className="flex gap-4 justify-center">
                   <ModernButton onClick={handleProvisionClient} className="h-12 px-8">
-                    🔄 Try Again
+                    Try Again
                   </ModernButton>
                   <ModernButton
                     variant="outline"
                     onClick={() => window.location.href = 'mailto:hello@klariqo.com'}
                     className="h-12 px-8"
                   >
-                    📧 Contact Support
+                    Contact Support
                   </ModernButton>
                 </div>
 
@@ -1376,7 +1377,7 @@ export default function Onboarding() {
                 >
                   <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-lg max-w-xl mx-auto">
                     <p className="text-sm">
-                      📧 <strong>Check your email</strong> - We've sent a verification link to <strong>{email}</strong>
+                      <strong>Check your email</strong> - We've sent a verification link to <strong>{email}</strong>
                     </p>
                   </div>
                 </motion.div>
