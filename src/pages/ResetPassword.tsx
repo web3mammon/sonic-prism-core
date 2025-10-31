@@ -88,23 +88,23 @@ export default function ResetPassword() {
           <ThemeToggle />
         </div>
         
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle className="text-2xl font-bold">Invalid Reset Link</CardTitle>
-            <CardDescription>
+        <div className="w-full max-w-md">
+          <div className="text-center pb-8">
+            <h2 className="text-4xl font-light mb-2">Invalid Reset Link</h2>
+            <p className="text-[#a0a0a0]">
               This password reset link is invalid or has expired. Please request a new one.
-            </CardDescription>
-          </CardHeader>
-          
-          <CardContent>
-            <Button 
+            </p>
+          </div>
+
+          <div>
+            <Button
               onClick={() => window.location.href = '/auth'}
               className="w-full"
             >
               Back to Sign In
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -115,15 +115,15 @@ export default function ResetPassword() {
         <ThemeToggle />
       </div>
       
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold">Reset Your Password</CardTitle>
-          <CardDescription>
+      <div className="w-full max-w-md">
+        <div className="text-center pb-8">
+          <h2 className="text-4xl font-light mb-2">Reset Your Password</h2>
+          <p className="text-[#a0a0a0]">
             Enter your new password below
-          </CardDescription>
-        </CardHeader>
-        
-        <CardContent>
+          </p>
+        </div>
+
+        <div>
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="password">New Password</Label>
@@ -136,7 +136,7 @@ export default function ResetPassword() {
                 minLength={6}
               />
             </div>
-            
+
             <div className="space-y-2">
               <Label htmlFor="confirmPassword">Confirm New Password</Label>
               <Input
@@ -148,17 +148,17 @@ export default function ResetPassword() {
                 minLength={6}
               />
             </div>
-            
-            <Button 
-              type="submit" 
-              className="w-full" 
+
+            <Button
+              type="submit"
+              className="w-full"
               disabled={isLoading}
             >
               {isLoading ? "Updating password..." : "Update Password"}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

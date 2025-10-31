@@ -6,7 +6,7 @@ import { ChannelType } from "@/contexts/OnboardingContext";
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { ModernButton } from "@/components/ui/modern-button";
-import { Loader2, Edit2, Check, Eye, EyeOff, Sparkles, MessageSquare, Zap, Phone, Mail } from "lucide-react";
+import { Loader2, Edit2, Check, Eye, EyeOff, Sparkles, Mail } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -562,42 +562,43 @@ export default function Onboarding() {
             className="w-full"
           >
             {/* Header */}
-            <div className="text-center mb-12">
-              <h1 className="text-5xl md:text-6xl font-extralight mb-4">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-light mb-4">
                 What would you like your new AI receptionist to do?
-              </h1>
-              <p className="text-xl text-muted-foreground">
-                Pick one to start. You can always add more channels later.
+              </h2>
+              <p className="text-[#a0a0a0]">
+                Start with 30 minutes free trial • No credit card required • Test for 3 days risk-free
               </p>
             </div>
 
             {/* Channel Cards */}
-            <div className="grid md:grid-cols-3 gap-6 mb-8 items-center">
+            <div className="grid md:grid-cols-3 gap-8 items-center">
               <ChannelCard
-                icon={<MessageSquare className="w-10 h-10 text-primary mb-4" />}
-                title="Handle Website Visitors"
-                price="$39"
-                badge="Best for Online Businesses"
+                icon={<i className="fas fa-comment-dots text-3xl text-white"></i>}
+                title="Website Widget Only"
+                price="$99"
                 features={[
-                  "Chat widget on your site",
-                  "Copy one line of code—takes 30 seconds",
-                  "Answers questions instantly",
-                  "Captures leads while you sleep"
+                  "500 minutes (~8 hours)",
+                  "AI chat widget for website",
+                  "Chat transcripts & analytics",
+                  "Customizable branding",
+                  "Only $0.15/min after that"
                 ]}
                 onClick={() => handleChannelSelect('website')}
                 delay={0.1}
               />
 
               <ChannelCard
-                icon={<Zap className="w-10 h-10 text-primary mb-4" />}
-                title="Handle Both Phone Calls and Website Visitors"
-                price="$69"
-                badge="Best Value - Save $19"
+                icon={<i className="fas fa-star text-3xl text-white"></i>}
+                title="Phone + Website"
+                price="$179"
+                badge="Recommended"
                 features={[
-                  "Phone calls + website chats",
-                  "Everything in one dashboard",
-                  "Never miss a customer again",
-                  "Perfect for growing businesses"
+                  "500 phone + 500 website mins (~17 hours)",
+                  "Everything in Phone + Website Widget",
+                  "Unified dashboard",
+                  "Cross-channel analytics and syncing",
+                  "Only $0.12/min after that"
                 ]}
                 onClick={() => handleChannelSelect('both')}
                 delay={0.2}
@@ -605,27 +606,25 @@ export default function Onboarding() {
               />
 
               <ChannelCard
-                icon={<Phone className="w-10 h-10 text-primary mb-4" />}
-                title="Handle Phone Calls"
-                price="$49"
-                badge="Best for Local Businesses"
+                icon={<i className="fas fa-phone text-3xl text-white"></i>}
+                title="Phone Only"
+                price="$129"
                 features={[
-                  "Use your existing number or get a new one",
-                  "AI answers 24/7—no more missed calls",
-                  "Books appointments automatically",
-                  "Perfect for local businesses"
+                  "500 minutes (~8 hours)",
+                  "AI phone receptionist 24/7",
+                  "Call transcripts & analytics",
+                  "Calendar integration",
+                  "Only $0.15/min after that"
                 ]}
                 onClick={() => handleChannelSelect('phone')}
                 delay={0.3}
               />
             </div>
 
-            {/* Footer Note */}
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">
-                3-day free trial • No credit card required • Cancel anytime
-              </p>
-            </div>
+            {/* Trial Details */}
+            <p className="text-center text-[#a0a0a0] text-sm mt-12 font-light">
+              All plans include: AI Lead Tracking • Calendar Integration • Automatic Bookings • Human Transfer • Full Transcripts • Analytics Dashboard
+            </p>
           </motion.div>
         );
 
@@ -641,10 +640,10 @@ export default function Onboarding() {
           >
             {/* Header */}
             <div className="text-center mb-12">
-              <h1 className="text-5xl md:text-6xl font-extralight mb-4">
+              <h2 className="text-4xl font-light mb-4">
                 Website Analysis
-              </h1>
-              <p className="text-xl text-muted-foreground">
+              </h2>
+              <p className="text-[#a0a0a0]">
                 We'll analyze your website to understand your business
               </p>
             </div>
@@ -727,10 +726,10 @@ export default function Onboarding() {
           >
             {/* Header */}
             <div className="text-center mb-12">
-              <h1 className="text-5xl md:text-6xl font-extralight mb-4">
+              <h2 className="text-4xl font-light mb-4">
                 {state.analysis ? 'Review Your Details' : 'Tell Us About Your Business'}
-              </h1>
-              <p className="text-xl text-muted-foreground">
+              </h2>
+              <p className="text-[#a0a0a0]">
                 {state.analysis
                   ? 'We\'ve analyzed your website. Make any edits if needed.'
                   : 'Fill in your business details to create your AI receptionist.'}
@@ -914,10 +913,10 @@ export default function Onboarding() {
           >
             {/* Header */}
             <div className="text-center mb-12">
-              <h1 className="text-5xl md:text-6xl font-extralight mb-4">
+              <h2 className="text-4xl font-light mb-4">
                 Choose Your AI Voice
-              </h1>
-              <p className="text-xl text-muted-foreground">
+              </h2>
+              <p className="text-[#a0a0a0]">
                 Select the voice that will represent your business
               </p>
             </div>
@@ -1044,10 +1043,10 @@ export default function Onboarding() {
           >
             {/* Header */}
             <div className="text-center mb-12">
-              <h1 className="text-5xl md:text-6xl font-extralight mb-4">
+              <h2 className="text-4xl font-light mb-4">
                 Create Your Account
-              </h1>
-              <p className="text-xl text-muted-foreground">
+              </h2>
+              <p className="text-[#a0a0a0]">
                 Almost there! Just a few more details to get started.
               </p>
             </div>
@@ -1252,15 +1251,15 @@ export default function Onboarding() {
                 transition={{ delay: 0.3 }}
                 className="space-y-4"
               >
-                <h1 className="text-5xl md:text-7xl font-extralight leading-tight">
+                <h1 className="text-5xl md:text-7xl font-thin leading-tight">
                   Almost there!
                   <br />
                   Check your email
                 </h1>
-                <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-                  We've sent a verification link to <span className="font-medium text-foreground">{email}</span>
+                <p className="text-xl md:text-2xl text-[#a0a0a0] max-w-2xl mx-auto font-light">
+                  We've sent a verification link to <span className="font-medium text-white">{email}</span>
                 </p>
-                <p className="text-lg text-muted-foreground max-w-xl mx-auto">
+                <p className="text-lg text-[#a0a0a0] max-w-xl mx-auto font-light">
                   Click the link in the email to verify your account and access your AI receptionist dashboard.
                 </p>
               </motion.div>
@@ -1293,9 +1292,9 @@ export default function Onboarding() {
                 </div>
 
                 <div className="space-y-4">
-                  <h1 className="text-4xl md:text-5xl font-extralight">
+                  <h2 className="text-4xl font-light">
                     Setup encountered an issue
-                  </h1>
+                  </h2>
                   <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg max-w-xl mx-auto">
                     <p className="text-sm text-red-500">
                       {provisioningError}
@@ -1344,12 +1343,12 @@ export default function Onboarding() {
                   transition={{ delay: 0.3 }}
                   className="space-y-4"
                 >
-                  <h1 className="text-5xl md:text-7xl font-extralight leading-tight">
+                  <h1 className="text-5xl md:text-7xl font-thin leading-tight">
                     Setup complete!
                     <br />
                     You're officially unstoppable
                   </h1>
-                  <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
+                  <p className="text-xl md:text-2xl text-[#a0a0a0] max-w-2xl mx-auto font-light">
                     Your AI receptionist is ready. Head to your dashboard to see the magic happen.
                   </p>
                 </motion.div>

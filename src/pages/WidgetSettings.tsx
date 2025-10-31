@@ -89,8 +89,8 @@ export default function WidgetSettings() {
   }, [client?.client_id]);
 
   const generateEmbedCode = (clientId: string) => {
-    // Get the Supabase Storage URL for the widget
-    const widgetUrl = `https://btqccksigmohyjdxgrrj.supabase.co/storage/v1/object/public/widgets/klariqo-widget.js`;
+    // Use CDN for better performance and branding
+    const widgetUrl = `https://cdn.klariqo.com/widgets/klariqo-widget.js`;
 
     return `<!-- Klariqo Voice AI Widget -->
 <script>

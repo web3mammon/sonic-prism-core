@@ -139,15 +139,15 @@ export default function Login() {
         </Link>
       </div>
 
-      <Card className="w-full max-w-md border-border/50">
-        <CardHeader className="text-center pb-8">
-          <CardTitle className="text-4xl font-extralight mb-2">Welcome Back</CardTitle>
-          <CardDescription className="text-base">
+      <div className="w-full max-w-md">
+        <div className="text-center pb-8">
+          <h2 className="text-4xl font-light mb-2">Welcome Back</h2>
+          <p className="text-base text-[#a0a0a0]">
             Sign in to your Klariqo account
-          </CardDescription>
-        </CardHeader>
+          </p>
+        </div>
 
-        <CardContent>
+        <div>
           {/* Show error only if logged in but no client */}
           {user && profile && !fetchingClient && noClientError && (
             <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm">
@@ -182,7 +182,7 @@ export default function Login() {
               <Button
                 type="button"
                 variant="ghost"
-                className="w-full text-muted-foreground hover:text-foreground"
+                className="w-full text-[#a0a0a0] hover:text-white"
                 onClick={() => setResetMode(false)}
               >
                 ← Back to Sign In
@@ -209,7 +209,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setResetMode(true)}
-                    className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="text-sm text-[#a0a0a0] hover:text-white transition-colors"
                   >
                     Forgot password?
                   </button>
@@ -233,10 +233,10 @@ export default function Login() {
               </Button>
 
               {/* New to Klariqo Link */}
-              <div className="pt-4 border-t border-border/50">
+              <div className="pt-4 border-t border-[rgba(255,255,255,0.12)]">
                 <Link
                   to="/onboarding"
-                  className="group flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  className="group flex items-center justify-center gap-2 text-sm text-[#a0a0a0] hover:text-white transition-colors font-light"
                 >
                   <span>New to Klariqo? <span className="font-medium">Start here</span></span>
                   <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
@@ -244,8 +244,8 @@ export default function Login() {
               </div>
             </form>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

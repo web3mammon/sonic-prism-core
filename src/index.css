@@ -68,13 +68,13 @@ All colors MUST be HSL.
   }
 
   .dark {
-    --background: 0 0% 6%;          /* #0f0f0f - Darker, richer black like marketing site */
+    --background: 0 0% 3.9%;        /* #0a0a0a - Exact match with marketing site */
     --foreground: 0 0% 98%;          /* #fafafa - Softer white */
 
-    --card: 0 0% 8%;                 /* #141414 - Elevated surface */
+    --card: 0 0% 10%;                /* #1a1a1a - Elevated surface like marketing */
     --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 8%;
+    --popover: 0 0% 10%;
     --popover-foreground: 0 0% 98%;
 
     --primary: 0 84% 60%;            /* #ef4444 - RED */

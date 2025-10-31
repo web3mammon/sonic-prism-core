@@ -1,6 +1,4 @@
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/badge";
-import { ArrowRight } from "lucide-react";
 import { ReactNode } from "react";
 
 interface ChannelCardProps {
@@ -30,68 +28,67 @@ export function ChannelCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay }}
       onClick={onClick}
-      className="group relative cursor-pointer"
+      className={`cursor-pointer rounded-2xl transition-all duration-300 relative ${
+        emphasized
+          ? 'p-12 border border-[#ef4444] transform md:scale-105'
+          : 'p-8 border border-[rgba(255,255,255,0.12)] hover:border-[rgba(255,255,255,0.2)]'
+      }`}
+      style={emphasized ? {
+        background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(220, 38, 38, 0.05))',
+        boxShadow: '0 8px 24px rgba(239, 68, 68, 0.2)'
+      } : {}}
     >
-      <div className={`relative rounded-2xl border-2 border-white/8 bg-white/[0.02] group-hover:border-primary/50 group-hover:bg-white/[0.04] transition-all duration-300 h-full flex flex-col ${emphasized ? 'p-10' : 'p-8'}`}
-      >
-        {/* Badge */}
-        {badge && (
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-            <Badge className="bg-primary text-white border-primary px-3 py-1">
-              {badge}
-            </Badge>
-          </div>
-        )}
-
-        {/* Icon */}
-        <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 rounded-2xl bg-primary/10 flex items-center justify-center text-4xl group-hover:scale-110 transition-transform duration-300">
-            {icon}
-          </div>
+      {/* Badge */}
+      {badge && (
+        <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+          <span className="bg-[#ef4444] text-white px-4 py-1 rounded-full text-xs font-medium">
+            {badge.toUpperCase()}
+          </span>
         </div>
+      )}
 
-        {/* Title & Price */}
-        <div className="text-center mb-6">
-          <h3 className="text-2xl font-extralight mb-2">{title}</h3>
-          <p className="text-3xl font-light text-primary">{price}</p>
-          <p className="text-sm text-muted-foreground mt-1">per month</p>
+      {/* Icon */}
+      <div className="text-center mb-6">
+        <div className={`inline-block p-3 rounded-xl mb-4 ${
+          emphasized
+            ? 'bg-gradient-to-br from-[#ef4444] to-[#dc2626]'
+            : 'bg-[#0a0a0a]'
+        }`}>
+          {icon}
         </div>
-
-        {/* Features */}
-        <div className="space-y-3 flex-1">
-          {features.map((feature, index) => (
-            <div key={index} className="flex items-start gap-2">
-              <div className="mt-1 flex-shrink-0">
-                <svg
-                  className="w-4 h-4 text-primary"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <p className="text-sm text-muted-foreground">{feature}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Arrow Indicator */}
-        <div className="flex items-center justify-center mt-6">
-          <div className="flex items-center gap-2 text-sm font-medium text-primary opacity-0 group-hover:opacity-100 transition-all duration-300 group-hover:translate-x-1">
-            <span>Get Started</span>
-            <ArrowRight className="w-4 h-4" />
-          </div>
-        </div>
-
-        {/* Hover Glow Effect */}
-        <div className="absolute inset-0 rounded-2xl bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 -z-10 pointer-events-none" />
+        <h3 className="text-2xl font-medium mb-2">{title}</h3>
+        <p className="text-[#a0a0a0] text-sm">AI for your business</p>
       </div>
+
+      {/* Price */}
+      <div className="text-center mb-8">
+        <div className="text-5xl font-light mb-2">
+          {price}
+          <span className="text-2xl text-[#a0a0a0]">/mo</span>
+        </div>
+        <p className="text-[#a0a0a0] text-sm">{features[0]}</p>
+      </div>
+
+      {/* Features */}
+      <div className="space-y-4 mb-8">
+        {features.slice(1).map((feature, index) => (
+          <div key={index} className="flex items-start gap-3">
+            <i className="fas fa-check text-green-500 mt-1"></i>
+            <span className="text-sm font-light">{feature}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* CTA Button - styled like marketing site */}
+      <button
+        className={`block w-full px-6 py-3 rounded-full text-center font-medium transition-colors ${
+          emphasized
+            ? 'bg-[#ef4444] text-white hover:bg-[#dc2626]'
+            : 'bg-white text-[#0a0a0a] hover:bg-[#f5f5f5]'
+        }`}
+      >
+        Start Free Trial
+      </button>
     </motion.div>
   );
 }

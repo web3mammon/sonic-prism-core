@@ -55,12 +55,12 @@ export function SetupModal({
           setWidgetCode(data.embed_code);
         } else {
           // Fallback to basic code if no config exists
-          setWidgetCode(`<script src="https://btqccksigmohyjdxgrrj.supabase.co/storage/v1/object/public/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+          setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
         }
       } catch (error) {
         console.error('Error fetching widget code:', error);
         // Fallback to basic code
-        setWidgetCode(`<script src="https://btqccksigmohyjdxgrrj.supabase.co/storage/v1/object/public/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+        setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
       } finally {
         setLoadingWidget(false);
       }
