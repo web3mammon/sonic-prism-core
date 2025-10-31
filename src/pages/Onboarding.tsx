@@ -572,12 +572,12 @@ export default function Onboarding() {
             </div>
 
             {/* Channel Cards */}
-            <div className="grid md:grid-cols-3 gap-6 mb-8">
+            <div className="grid md:grid-cols-3 gap-6 mb-8 items-start">
               <ChannelCard
-                icon={<MessageSquare className="w-10 h-10 text-primary" />}
+                icon={<MessageSquare className="w-10 h-10 text-primary mb-4" />}
                 title="Handle Website Visitors"
                 price="$39"
-                badge="Popular for Online Businesses"
+                badge="Best for Online Businesses"
                 features={[
                   "Chat widget on your site",
                   "Copy one line of code—takes 30 seconds",
@@ -589,7 +589,7 @@ export default function Onboarding() {
               />
 
               <ChannelCard
-                icon={<Zap className="w-10 h-10 text-primary" />}
+                icon={<Zap className="w-10 h-10 text-primary mb-4" />}
                 title="Handle Both Phone Calls and Website Visitors"
                 price="$69"
                 badge="Best Value - Save $19"
@@ -601,13 +601,14 @@ export default function Onboarding() {
                 ]}
                 onClick={() => handleChannelSelect('both')}
                 delay={0.2}
+                emphasized={true}
               />
 
               <ChannelCard
-                icon={<Phone className="w-10 h-10 text-primary" />}
+                icon={<Phone className="w-10 h-10 text-primary mb-4" />}
                 title="Handle Phone Calls"
                 price="$49"
-                badge="Popular for Local Businesses"
+                badge="Best for Local Businesses"
                 features={[
                   "Use your existing number or get a new one",
                   "AI answers 24/7—no more missed calls",

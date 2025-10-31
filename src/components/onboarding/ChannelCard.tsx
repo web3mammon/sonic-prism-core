@@ -11,6 +11,7 @@ interface ChannelCardProps {
   features: string[];
   onClick: () => void;
   delay?: number;
+  emphasized?: boolean;
 }
 
 export function ChannelCard({
@@ -20,7 +21,8 @@ export function ChannelCard({
   badge,
   features,
   onClick,
-  delay = 0
+  delay = 0,
+  emphasized = false
 }: ChannelCardProps) {
   return (
     <motion.div
@@ -30,7 +32,7 @@ export function ChannelCard({
       onClick={onClick}
       className="group relative cursor-pointer"
     >
-      <div className="relative rounded-2xl border-2 border-white/8 bg-white/[0.02] p-8 group-hover:border-primary/50 group-hover:bg-white/[0.04] transition-all duration-300 h-full flex flex-col"
+      <div className={`relative rounded-2xl border-2 border-white/8 bg-white/[0.02] group-hover:border-primary/50 group-hover:bg-white/[0.04] transition-all duration-300 h-full flex flex-col ${emphasized ? 'p-10' : 'p-8'}`}
       >
         {/* Badge */}
         {badge && (
