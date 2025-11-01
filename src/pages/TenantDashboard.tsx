@@ -102,49 +102,30 @@ export default function Dashboard() {
   // Cost calculation for minute-based pricing (NEW - Nov 1, 2025)
   let costText = '$0.00';
 
-  if (hasMinuteTracking) {
-    // NEW SYSTEM: Minute-based pricing
-    isOnPaidPlan = !!client?.paid_plan;
+  // Minute-based pricing (all users)
+  isOnPaidPlan = !!client?.paid_plan;
 
-    if (isOnPaidPlan) {
-      // Paid plan user
-      minutesTotal = client?.paid_minutes_included || 0;
-      minutesUsed = client?.paid_minutes_used || 0;
-      minutesRemaining = Math.max(0, minutesTotal - minutesUsed);
+  if (isOnPaidPlan) {
+    // Paid plan user
+    minutesTotal = client?.paid_minutes_included || 0;
+    minutesUsed = client?.paid_minutes_used || 0;
+    minutesRemaining = Math.max(0, minutesTotal - minutesUsed);
 
-      // Calculate cost for paid users
-      if (minutesUsed <= minutesTotal) {
-        costText = 'Included in Base Package';
-      } else {
-        const overageMinutes = minutesUsed - minutesTotal;
-        const overageRate = channelType === 'both' ? 0.12 : 0.15; // Complete: $0.12/min, Single: $0.15/min
-        const overageCost = overageMinutes * overageRate;
-        costText = `Overusage: $${overageCost.toFixed(2)}`;
-      }
+    // Calculate cost for paid users
+    if (minutesUsed <= minutesTotal) {
+      costText = 'Included in Base Package';
     } else {
-      // Trial user - free
-      minutesTotal = client?.trial_minutes || 30;
-      minutesUsed = client?.trial_minutes_used || 0;
-      minutesRemaining = Math.max(0, minutesTotal - minutesUsed);
-      costText = '$0.00';
+      const overageMinutes = minutesUsed - minutesTotal;
+      const overageRate = channelType === 'both' ? 0.12 : 0.15; // Complete: $0.12/min, Single: $0.15/min
+      const overageCost = overageMinutes * overageRate;
+      costText = `Overusage: $${overageCost.toFixed(2)}`;
     }
   } else {
-    // OLD SYSTEM: Event-based (backwards compatibility for existing users)
-    let eventCountRemaining = 0;
-
-    if (channelType === 'phone') {
-      eventCountRemaining = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
-    } else if (channelType === 'website') {
-      eventCountRemaining = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
-    } else {
-      // Both: total remaining
-      const callsLeft = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
-      const convosLeft = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
-      eventCountRemaining = callsLeft + convosLeft;
-    }
-
-    // Map event counts to legacy display (will be removed after migration)
-    minutesRemaining = eventCountRemaining;
+    // Trial user - free
+    minutesTotal = client?.trial_minutes || 30;
+    minutesUsed = client?.trial_minutes_used || 0;
+    minutesRemaining = Math.max(0, minutesTotal - minutesUsed);
+    costText = '$0.00';
   }
 
   const isTrialActive = minutesRemaining > 0 && !isOnPaidPlan;

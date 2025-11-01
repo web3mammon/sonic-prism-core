@@ -875,30 +875,9 @@ async function saveSessionToDatabase(sessionId: string) {
     console.log('[Database] Chat session saved:', chatId);
 
     // ========================================
-    // MINUTE-BASED TRACKING (NEW - Nov 1, 2025)
+    // MINUTE-BASED TRACKING (Nov 1, 2025)
     // ========================================
     await trackMinuteUsage(session.clientId, duration, supabaseClient);
-
-    // OLD: Increment trial_conversations_used (website chat completed)
-    // TODO: Remove this after minute tracking is stable (keep for 2 weeks)
-    try {
-      const { data: clientData } = await supabaseClient
-        .from('voice_ai_clients')
-        .select('trial_conversations_used')
-        .eq('client_id', session.clientId)
-        .single();
-
-      const newCount = (clientData?.trial_conversations_used || 0) + 1;
-
-      await supabaseClient
-        .from('voice_ai_clients')
-        .update({ trial_conversations_used: newCount })
-        .eq('client_id', session.clientId);
-
-      console.log(`[Trial] Incremented trial_conversations_used for client ${session.clientId} → ${newCount}`);
-    } catch (error) {
-      console.error('[Trial] Error incrementing trial_conversations_used:', error);
-    }
   } catch (error) {
     console.error('[Database] Error saving chat session:', error);
   }

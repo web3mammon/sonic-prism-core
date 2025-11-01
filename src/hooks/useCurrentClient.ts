@@ -74,15 +74,8 @@ export function useCurrentClient(): CurrentClientData {
 
             created_at: clientData.created_at,
             updated_at: clientData.created_at,
-            // OLD: Event-based trial tracking (backwards compatibility)
-            trial_calls: clientData.trial_calls,
-            trial_calls_used: clientData.trial_calls_used || 0,
-            trial_conversations: clientData.trial_conversations,
-            trial_conversations_used: clientData.trial_conversations_used || 0,
-            trial_starts_at: clientData.trial_starts_at,
-            trial_ends_at: clientData.trial_ends_at,
 
-            // NEW: Minute-based pricing (November 1, 2025)
+            // Minute-based pricing (November 1, 2025)
             trial_minutes: clientData.trial_minutes,
             trial_minutes_used: clientData.trial_minutes_used || 0,
             paid_plan: clientData.paid_plan,

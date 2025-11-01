@@ -1235,40 +1235,6 @@ async function finalizeCallSession(callSid: string) {
     await trackMinuteUsage(session, duration);
   }
 
-  // OLD: Increment trial_calls_used (phone call completed)
-  // TODO: Remove this after minute tracking is stable (keep for 2 weeks)
-  if (session && session.client) {
-    try {
-      const { error } = await session.supabase.rpc('increment', {
-        table_name: 'voice_ai_clients',
-        column_name: 'trial_calls_used',
-        row_id: session.client.id
-      });
-
-      if (error) {
-        // Fallback to manual increment if RPC doesn't exist
-        const { data: clientData } = await session.supabase
-          .from('voice_ai_clients')
-          .select('trial_calls_used')
-          .eq('client_id', session.client.client_id)
-          .single();
-
-        const newCount = (clientData?.trial_calls_used || 0) + 1;
-
-        await session.supabase
-          .from('voice_ai_clients')
-          .update({ trial_calls_used: newCount })
-          .eq('client_id', session.client.client_id);
-
-        console.log(`[Trial] Incremented trial_calls_used for client ${session.client.client_id} → ${newCount}`);
-      } else {
-        console.log(`[Trial] Incremented trial_calls_used for client ${session.client.client_id}`);
-      }
-    } catch (error) {
-      console.error('[Trial] Error incrementing trial_calls_used:', error);
-    }
-  }
-
   // Track usage event in FlexPrice (for paid plans analytics - future)
   await trackFlexPriceEvent(session.client.user_id, callSid, duration);
 }

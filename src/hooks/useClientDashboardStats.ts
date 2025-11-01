@@ -35,10 +35,10 @@ export function useClientDashboardStats(clientId: string | null): UseDashboardSt
       setLoading(true);
       setError(null);
 
-      // Get client data (trial tracking)
+      // Get client data (minute-based trial tracking)
       const { data: clientData, error: clientError } = await supabase
         .from('voice_ai_clients')
-        .select('trial_calls, trial_calls_used, trial_conversations, trial_conversations_used, channel_type')
+        .select('trial_minutes, trial_minutes_used, paid_plan, paid_minutes_included, paid_minutes_used, channel_type')
         .eq('client_id', clientId)
         .single();
 
@@ -72,20 +72,24 @@ export function useClientDashboardStats(clientId: string | null): UseDashboardSt
       const channelType = clientData?.channel_type || 'phone';
       const avgCostPerCall = channelType === 'phone' ? 2.00 : 1.50;
 
-      // Calculate remaining trial calls/conversations
-      let callsRemaining = 0;
-      if (channelType === 'phone') {
-        callsRemaining = Math.max(0, (clientData?.trial_calls || 0) - (clientData?.trial_calls_used || 0));
-      } else if (channelType === 'website') {
-        callsRemaining = Math.max(0, (clientData?.trial_conversations || 0) - (clientData?.trial_conversations_used || 0));
+      // Calculate remaining minutes (trial or paid)
+      let minutesRemaining = 0;
+      const isPaidUser = clientData?.paid_plan === true;
+
+      if (isPaidUser) {
+        // Paid user: show remaining from included minutes
+        const minutesIncluded = clientData?.paid_minutes_included || 0;
+        const minutesUsed = clientData?.paid_minutes_used || 0;
+        minutesRemaining = Math.max(0, minutesIncluded - minutesUsed);
       } else {
-        // Both: total remaining
-        const callsLeft = Math.max(0, (clientData?.trial_calls || 0) - (clientData?.trial_calls_used || 0));
-        const convosLeft = Math.max(0, (clientData?.trial_conversations || 0) - (clientData?.trial_conversations_used || 0));
-        callsRemaining = callsLeft + convosLeft;
+        // Trial user: show remaining trial minutes
+        const trialMinutes = clientData?.trial_minutes || 30;
+        const trialUsed = clientData?.trial_minutes_used || 0;
+        minutesRemaining = Math.max(0, trialMinutes - trialUsed);
       }
 
-      const currentBalance = callsRemaining; // Legacy naming for compatibility
+      const callsRemaining = minutesRemaining; // Legacy naming for compatibility
+      const currentBalance = minutesRemaining; // Legacy naming for compatibility
 
       // Estimated total cost (calls made * cost per call) - for display only
       const totalCost = totalCalls * avgCostPerCall;

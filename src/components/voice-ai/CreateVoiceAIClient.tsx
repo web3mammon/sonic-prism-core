@@ -90,7 +90,7 @@ export const CreateVoiceAIClient: React.FC<CreateVoiceAIClientProps> = ({
           region: data.region,
           industry: data.industry,
           business_name: data.business_name,
-          channel_type: 'phone', // Default to phone (will get 10 trial_calls via DB trigger)
+          channel_type: 'phone', // Default to phone (will get 30 trial_minutes)
           status: 'inactive',
           config: clientConfig
         });
