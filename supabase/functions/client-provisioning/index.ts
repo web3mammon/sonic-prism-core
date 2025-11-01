@@ -159,12 +159,21 @@ serve(async (req) => {
       sunday: { closed: true }
     };
 
-    // EXPLICITLY set trial allocations based on channel_type
-    // Don't rely on DB trigger - it's not working reliably
+    // ========================================
+    // TRIAL ALLOCATION (Hybrid Approach - Nov 1, 2025)
+    // ========================================
+    // NEW: Minute-based trial (universal for all channels)
+    const trial_minutes = 30; // 30 minutes for all users
+    const trial_minutes_used = 0;
+
+    // OLD: Event-based trial (kept for backwards compatibility for 2 weeks)
+    // TODO: Remove after minute tracking is stable
     const trial_calls = channel_type === 'phone' ? 10 : channel_type === 'website' ? 0 : 10;
     const trial_conversations = channel_type === 'phone' ? 0 : channel_type === 'website' ? 10 : 10;
 
-    console.log(`[ClientProvisioning] Trial allocation for channel_type '${channel_type}': ${trial_calls} calls, ${trial_conversations} conversations`);
+    console.log(`[ClientProvisioning] Trial allocation for channel_type '${channel_type}':`);
+    console.log(`  - NEW: ${trial_minutes} minutes (universal)`);
+    console.log(`  - OLD: ${trial_calls} calls, ${trial_conversations} conversations (backwards compat)`);
 
     const { data: clientData, error: clientError} = await supabaseClient
       .from('voice_ai_clients')
@@ -183,7 +192,10 @@ serve(async (req) => {
         business_hours: business_hours,
         channel_type: channel_type,
         status: 'active',
-        // EXPLICITLY set trial allocations (don't rely on trigger)
+        // NEW: Minute-based trial tracking (Nov 1, 2025)
+        trial_minutes: trial_minutes,
+        trial_minutes_used: trial_minutes_used,
+        // OLD: Event-based trial tracking (backwards compatibility - remove after 2 weeks)
         trial_calls: trial_calls,
         trial_conversations: trial_conversations,
         trial_calls_used: 0,
@@ -196,7 +208,7 @@ serve(async (req) => {
         target_audience: requestData.target_audience || null,
         tone: requestData.tone || 'professional',
       })
-      .select('client_id, client_slug, user_id, business_name, region, industry, phone_number, voice_id, greeting_message, system_prompt, timezone, business_hours, channel_type, status, trial_calls, trial_calls_used, trial_conversations, trial_conversations_used, trial_starts_at, trial_ends_at, created_at, website_url, services_offered, pricing_info, target_audience, tone')
+      .select('client_id, client_slug, user_id, business_name, region, industry, phone_number, voice_id, greeting_message, system_prompt, timezone, business_hours, channel_type, status, trial_minutes, trial_minutes_used, trial_calls, trial_calls_used, trial_conversations, trial_conversations_used, trial_starts_at, trial_ends_at, created_at, website_url, services_offered, pricing_info, target_audience, tone')
       .single();
 
     if (clientError) {

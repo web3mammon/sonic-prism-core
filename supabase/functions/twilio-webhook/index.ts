@@ -81,6 +81,45 @@ async function handleVoiceWebhook(req: Request, supabase: any) {
 
   console.log(`✅ Client found: ${client.business_name} (${client.client_id})`);
 
+  // ========================================
+  // ENFORCEMENT: Check trial limits (Nov 1, 2025)
+  // ========================================
+  const hasMinuteTracking = client.trial_minutes !== undefined && client.trial_minutes !== null;
+
+  if (hasMinuteTracking && !client.paid_plan) {
+    // Trial user - check if limit exceeded
+    const minutesUsed = client.trial_minutes_used || 0;
+    const minutesTotal = client.trial_minutes || 30;
+
+    if (minutesUsed >= minutesTotal) {
+      console.warn(`[BLOCKED] 🚫 Trial exhausted for ${client.client_id}: ${minutesUsed}/${minutesTotal} minutes used`);
+
+      const blockTwiML = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="Polly.Joanna">Your trial has ended. Please upgrade to continue. Visit app dot klariqo dot com to choose a plan. Thank you!</Say>
+  <Hangup/>
+</Response>`;
+
+      return new Response(blockTwiML, {
+        headers: { 'Content-Type': 'text/xml' }
+      });
+    } else {
+      const remaining = minutesTotal - minutesUsed;
+      console.log(`[Trial] ✅ ${client.client_id} has ${remaining} minutes remaining (${minutesUsed}/${minutesTotal} used)`);
+    }
+  } else if (hasMinuteTracking && client.paid_plan) {
+    // Paid user - allow call, overage tracked separately
+    const minutesUsed = client.paid_minutes_used || 0;
+    const minutesIncluded = client.paid_minutes_included || 0;
+    const overage = Math.max(0, minutesUsed - minutesIncluded);
+
+    if (overage > 0) {
+      console.log(`[Paid] ⚠️ ${client.client_id} in overage: ${overage} minutes over ${minutesIncluded} included`);
+    } else {
+      console.log(`[Paid] ✅ ${client.client_id} within limits: ${minutesUsed}/${minutesIncluded} minutes used`);
+    }
+  }
+
   // DON'T create session in database here - it causes timeout!
   // FastAPI creates IN-MEMORY session only, WebSocket handler will create DB session
   console.log(`📞 Generating TwiML for: ${callSid}`);

@@ -28,13 +28,22 @@ export interface VoiceAIClient {
   target_audience?: string;
   tone?: string;
 
-  // Trial tracking
+  // OLD: Event-based trial tracking (backwards compatibility)
   trial_calls?: number;
   trial_calls_used?: number;
   trial_conversations?: number;
   trial_conversations_used?: number;
   trial_starts_at?: string;
   trial_ends_at?: string;
+
+  // NEW: Minute-based pricing (November 1, 2025)
+  trial_minutes?: number;
+  trial_minutes_used?: number;
+  paid_plan?: boolean;  // TRUE = paid user, FALSE = trial user
+  paid_minutes_included?: number;
+  paid_minutes_used?: number;
+  billing_cycle_start?: string;
+  billing_cycle_end?: string;
 
   created_at: string;
   updated_at: string;

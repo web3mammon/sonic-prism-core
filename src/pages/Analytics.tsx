@@ -30,6 +30,10 @@ export default function Analytics() {
   const { client, loading: clientLoading } = useCurrentClient();
   const { analytics, loading: analyticsLoading, error } = useAnalytics(client?.client_id || null, dateRange);
 
+  // Determine channel type and tracking mode
+  const channelType = client?.channel_type || 'phone';
+  const hasMinuteTracking = analytics?.hasMinuteTracking || false;
+
   const exportAnalytics = () => {
     if (!analytics || !client) return;
 
@@ -37,10 +41,20 @@ export default function Analytics() {
       ['Metric', 'Value'],
       ['Business Name', client.business_name],
       ['Date Range', dateRange],
-      ['Total Calls', analytics.totalCalls.toString()],
-      ['Pickup Rate', `${analytics.pickupRate}%`],
-      ['Average Call Duration', `${analytics.avgCallDuration} min`],
-      ['Total Call Time', `${analytics.totalCallTime} min`],
+      ['Channel Type', channelType],
+      ...(hasMinuteTracking ? [
+        ['Total Minutes Used', analytics.totalMinutesUsed.toString()],
+        ['Total Sessions', analytics.totalSessions.toString()],
+      ] : [
+        ['Total Sessions', analytics.totalSessions.toString()],
+      ]),
+      ...(channelType === 'both' ? [
+        ['Phone Sessions', analytics.phoneSessions.toString()],
+        ['Chat Sessions', analytics.chatSessions.toString()],
+      ] : []),
+      ['Success Rate', `${analytics.pickupRate}%`],
+      ['Average Session Duration', `${analytics.avgSessionDuration} min`],
+      ['Total Session Time', `${analytics.totalSessionTime} min`],
     ].map(row => row.join(',')).join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -85,7 +99,11 @@ export default function Analytics() {
         <div className="space-y-2">
           <h1 className="text-5xl font-extralight mb-2">Analytics Dashboard</h1>
           <p className="text-muted-foreground">
-            Real-time call metrics and performance data
+            {channelType === 'both'
+              ? 'Real-time metrics for calls and chats'
+              : channelType === 'website'
+              ? 'Real-time chat metrics and performance data'
+              : 'Real-time call metrics and performance data'}
           </p>
         </div>
         <div className="flex space-x-2">
@@ -110,30 +128,63 @@ export default function Analytics() {
 
       {/* Key Metrics */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <MetricsCard
-          title="Total Calls"
-          value={analytics.totalCalls.toLocaleString()}
-          icon={Phone}
-          subtitle="all calls received"
-        />
-        <MetricsCard
-          title="Pickup Rate"
-          value={`${analytics.pickupRate}%`}
-          icon={Target}
-          subtitle="calls answered by AI"
-        />
-        <MetricsCard
-          title="Avg Call Duration"
-          value={`${analytics.avgCallDuration} min`}
-          icon={Clock}
-          subtitle="average duration"
-        />
-        <MetricsCard
-          title="Total Call Time"
-          value={`${analytics.totalCallTime} min`}
-          icon={TrendingUp}
-          subtitle="total time on calls"
-        />
+        {hasMinuteTracking ? (
+          // Minute-based tracking - show minutes first
+          <>
+            <MetricsCard
+              title="Minutes Used"
+              value={analytics.totalMinutesUsed.toLocaleString()}
+              icon={Clock}
+              subtitle={channelType === 'both' ? 'calls + chats' : channelType === 'website' ? 'total chat time' : 'total call time'}
+            />
+            <MetricsCard
+              title={channelType === 'both' ? 'Total Sessions' : channelType === 'website' ? 'Total Chats' : 'Total Calls'}
+              value={analytics.totalSessions.toLocaleString()}
+              icon={Phone}
+              subtitle={channelType === 'both' ? `${analytics.phoneSessions} calls, ${analytics.chatSessions} chats` : 'all interactions'}
+            />
+            <MetricsCard
+              title="Success Rate"
+              value={`${analytics.pickupRate}%`}
+              icon={Target}
+              subtitle="completed successfully"
+            />
+            <MetricsCard
+              title="Avg Duration"
+              value={`${analytics.avgSessionDuration} min`}
+              icon={TrendingUp}
+              subtitle="per session"
+            />
+          </>
+        ) : (
+          // Event-based tracking - show sessions
+          <>
+            <MetricsCard
+              title={channelType === 'both' ? 'Total Sessions' : channelType === 'website' ? 'Total Chats' : 'Total Calls'}
+              value={analytics.totalSessions.toLocaleString()}
+              icon={Phone}
+              subtitle={channelType === 'both' ? `${analytics.phoneSessions} calls, ${analytics.chatSessions} chats` : 'all received'}
+            />
+            <MetricsCard
+              title="Success Rate"
+              value={`${analytics.pickupRate}%`}
+              icon={Target}
+              subtitle={channelType === 'website' ? 'chats completed' : 'calls answered'}
+            />
+            <MetricsCard
+              title="Avg Duration"
+              value={`${analytics.avgSessionDuration} min`}
+              icon={Clock}
+              subtitle="average duration"
+            />
+            <MetricsCard
+              title="Total Time"
+              value={`${analytics.totalSessionTime} min`}
+              icon={TrendingUp}
+              subtitle={channelType === 'both' ? 'calls + chats' : 'total time'}
+            />
+          </>
+        )}
       </div>
 
       <motion.div
@@ -144,7 +195,7 @@ export default function Analytics() {
         <hr className="border-black/[0.05] dark:border-white/5" />
       </motion.div>
 
-      {/* Call Volume Trend - Full Width */}
+      {/* Volume Trend - Full Width */}
       <motion.div
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
@@ -156,18 +207,29 @@ export default function Analytics() {
             <div className="p-2 rounded-lg bg-primary/10">
               <BarChart3 className="h-5 w-5 text-primary" />
             </div>
-            <h2 className="text-2xl font-extralight">Call Volume Trend</h2>
+            <h2 className="text-2xl font-extralight">
+              {hasMinuteTracking ? 'Daily Minutes Usage' : channelType === 'both' ? 'Session Volume Trend' : channelType === 'website' ? 'Chat Volume Trend' : 'Call Volume Trend'}
+            </h2>
           </div>
           <p className="text-muted-foreground text-sm">
-            Daily call volume over the selected period
+            {hasMinuteTracking
+              ? 'Minutes consumed each day over the selected period'
+              : channelType === 'both'
+              ? 'Daily session volume (calls + chats) over the selected period'
+              : channelType === 'website'
+              ? 'Daily chat volume over the selected period'
+              : 'Daily call volume over the selected period'}
           </p>
         </div>
         <div className="space-y-4">
           {/* Vertical Bar Chart */}
           <div className="h-64 flex items-end justify-between gap-2 relative">
-            {analytics.callVolumeData.map((day, index) => {
-              const maxCalls = Math.max(...analytics.callVolumeData.map(d => d.calls), 1);
-              const heightPercent = Math.max((day.calls / maxCalls) * 100, 8);
+            {analytics.volumeData.map((day, index) => {
+              const maxValue = hasMinuteTracking
+                ? Math.max(...analytics.volumeData.map(d => d.minutes), 1)
+                : Math.max(...analytics.volumeData.map(d => d.sessions), 1);
+              const currentValue = hasMinuteTracking ? day.minutes : day.sessions;
+              const heightPercent = Math.max((currentValue / maxValue) * 100, 8);
 
               return (
                 <div key={index} className="flex-1 flex flex-col items-center justify-end h-full gap-2 pb-6">
@@ -177,8 +239,14 @@ export default function Analytics() {
                       className="w-full bg-primary rounded-t-md hover:bg-primary/80 transition-all cursor-pointer h-full"
                     >
                       {/* Tooltip on hover */}
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-popover px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg border z-10">
-                        {day.calls} calls
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-popover text-popover-foreground px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-lg border z-10">
+                        {hasMinuteTracking
+                          ? `${day.minutes} mins (${day.sessions} sessions)`
+                          : channelType === 'both'
+                          ? `${day.sessions} sessions`
+                          : channelType === 'website'
+                          ? `${day.sessions} chats`
+                          : `${day.sessions} calls`}
                       </div>
                     </div>
                   </div>
@@ -194,7 +262,7 @@ export default function Analytics() {
         </div>
       </motion.div>
 
-      {/* Call Intent Distribution - only show if we have intent data */}
+      {/* Intent Distribution - only show if we have intent data */}
       {analytics.intentDistribution && analytics.intentDistribution.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 30 }}
@@ -207,10 +275,16 @@ export default function Analytics() {
               <div className="p-2 rounded-lg bg-primary/10">
                 <Activity className="h-5 w-5 text-primary" />
               </div>
-              <h2 className="text-2xl font-extralight">Call Intent Distribution</h2>
+              <h2 className="text-2xl font-extralight">
+                {channelType === 'both' ? 'Session Intent Distribution' : channelType === 'website' ? 'Chat Intent Distribution' : 'Call Intent Distribution'}
+              </h2>
             </div>
             <p className="text-muted-foreground text-sm">
-              Breakdown of call types and their frequency
+              {channelType === 'both'
+                ? 'Breakdown of interaction types and their frequency'
+                : channelType === 'website'
+                ? 'Breakdown of chat types and their frequency'
+                : 'Breakdown of call types and their frequency'}
             </p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

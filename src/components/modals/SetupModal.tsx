@@ -47,18 +47,22 @@ export function SetupModal({
           .from('widget_config')
           .select('embed_code')
           .eq('client_id', clientId)
-          .single();
+          .maybeSingle(); // Use maybeSingle() instead of single() to handle 0 rows gracefully
 
-        if (error) throw error;
-
-        if (data?.embed_code) {
+        // Error means a real query error (not just "no rows")
+        if (error) {
+          console.error('Error fetching widget config:', error);
+          // Still provide fallback
+          setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+        } else if (data?.embed_code) {
+          // Widget config exists - use it
           setWidgetCode(data.embed_code);
         } else {
-          // Fallback to basic code if no config exists
+          // No widget config exists (phone-only client) - use fallback
           setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
         }
       } catch (error) {
-        console.error('Error fetching widget code:', error);
+        console.error('Unexpected error fetching widget code:', error);
         // Fallback to basic code
         setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
       } finally {

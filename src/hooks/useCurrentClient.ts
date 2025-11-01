@@ -74,13 +74,22 @@ export function useCurrentClient(): CurrentClientData {
 
             created_at: clientData.created_at,
             updated_at: clientData.created_at,
-            // Trial tracking fields
+            // OLD: Event-based trial tracking (backwards compatibility)
             trial_calls: clientData.trial_calls,
             trial_calls_used: clientData.trial_calls_used || 0,
             trial_conversations: clientData.trial_conversations,
             trial_conversations_used: clientData.trial_conversations_used || 0,
             trial_starts_at: clientData.trial_starts_at,
             trial_ends_at: clientData.trial_ends_at,
+
+            // NEW: Minute-based pricing (November 1, 2025)
+            trial_minutes: clientData.trial_minutes,
+            trial_minutes_used: clientData.trial_minutes_used || 0,
+            paid_plan: clientData.paid_plan,
+            paid_minutes_included: clientData.paid_minutes_included || 0,
+            paid_minutes_used: clientData.paid_minutes_used || 0,
+            billing_cycle_start: clientData.billing_cycle_start,
+            billing_cycle_end: clientData.billing_cycle_end,
           });
         } else {
           setClient(null);

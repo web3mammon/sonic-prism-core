@@ -1228,7 +1228,15 @@ async function finalizeCallSession(callSid: string) {
     await extractAndSaveLead(session);
   }
 
-  // Increment trial_calls_used (phone call completed)
+  // ========================================
+  // MINUTE-BASED TRACKING (NEW - Nov 1, 2025)
+  // ========================================
+  if (session && session.client) {
+    await trackMinuteUsage(session, duration);
+  }
+
+  // OLD: Increment trial_calls_used (phone call completed)
+  // TODO: Remove this after minute tracking is stable (keep for 2 weeks)
   if (session && session.client) {
     try {
       const { error } = await session.supabase.rpc('increment', {
@@ -1519,6 +1527,88 @@ async function checkFlexPriceBalance(userId: string): Promise<number> {
   } catch (error) {
     console.error('[FlexPrice] Balance check error:', error);
     return 999; // Fail open on exception
+  }
+}
+
+/**
+ * Track minute usage (NEW - November 1, 2025)
+ * Updates trial_minutes_used or paid_minutes_used based on call duration
+ */
+async function trackMinuteUsage(session: TwilioVoiceSession, durationSeconds: number): Promise<void> {
+  try {
+    // Calculate minutes (always round UP - partial minutes count as full minutes)
+    const minutes = Math.ceil(durationSeconds / 60);
+    console.log(`[Minutes] Call duration: ${durationSeconds}s = ${minutes} minute(s)`);
+
+    // Fetch current client data to check plan status
+    const { data: clientData, error: fetchError } = await session.supabase
+      .from('voice_ai_clients')
+      .select('client_id, trial_minutes, trial_minutes_used, paid_plan, paid_minutes_used, paid_minutes_included')
+      .eq('client_id', session.client.client_id)
+      .single();
+
+    if (fetchError || !clientData) {
+      console.error('[Minutes] Failed to fetch client data:', fetchError);
+      return;
+    }
+
+    // Determine if user is on trial or paid plan
+    const isOnTrial = !clientData.paid_plan; // FALSE = trial user
+    const currentMinutesUsed = isOnTrial ? (clientData.trial_minutes_used || 0) : (clientData.paid_minutes_used || 0);
+    const newMinutesUsed = currentMinutesUsed + minutes;
+
+    if (isOnTrial) {
+      // Update trial minutes
+      const { error: updateError } = await session.supabase
+        .from('voice_ai_clients')
+        .update({
+          trial_minutes_used: newMinutesUsed,
+          updated_at: new Date().toISOString()
+        })
+        .eq('client_id', session.client.client_id);
+
+      if (updateError) {
+        console.error('[Minutes] Failed to update trial_minutes_used:', updateError);
+      } else {
+        const remaining = (clientData.trial_minutes || 30) - newMinutesUsed;
+        console.log(`[Minutes] ✅ Trial usage updated: ${newMinutesUsed}/${clientData.trial_minutes || 30} minutes (${remaining} remaining)`);
+
+        // Warn if trial is almost exhausted
+        if (remaining <= 5 && remaining > 0) {
+          console.warn(`[Minutes] ⚠️ Trial almost exhausted for ${session.client.client_id}: ${remaining} minutes left`);
+        } else if (remaining <= 0) {
+          console.warn(`[Minutes] ⚠️ Trial EXHAUSTED for ${session.client.client_id}`);
+        }
+      }
+    } else {
+      // Update paid plan minutes
+      const { error: updateError } = await session.supabase
+        .from('voice_ai_clients')
+        .update({
+          paid_minutes_used: newMinutesUsed,
+          updated_at: new Date().toISOString()
+        })
+        .eq('client_id', session.client.client_id);
+
+      if (updateError) {
+        console.error('[Minutes] Failed to update paid_minutes_used:', updateError);
+      } else {
+        const included = clientData.paid_minutes_included || 0;
+        const remaining = included - newMinutesUsed;
+        const overage = remaining < 0 ? Math.abs(remaining) : 0;
+
+        console.log(`[Minutes] ✅ Paid usage updated: ${newMinutesUsed}/${included} minutes (Paid plan active)`);
+
+        if (overage > 0) {
+          console.warn(`[Minutes] ⚠️ OVERAGE for ${session.client.client_id}: ${overage} minutes over plan limit`);
+        } else if (remaining <= 50) {
+          console.warn(`[Minutes] ⚠️ Plan almost exhausted for ${session.client.client_id}: ${remaining} minutes left`);
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('[Minutes] Error tracking minute usage:', error);
   }
 }
 

@@ -59,37 +59,56 @@ export default function Billing() {
 
       setLoadingCredits(true);
 
-      // Credits are now per-client trial tracking
-      // Calculate remaining based on channel type
+      // ========================================
+      // MINUTE-BASED USAGE TRACKING (NEW - Nov 1, 2025)
+      // ========================================
+      const hasMinuteTracking = client.trial_minutes !== undefined && client.trial_minutes !== null;
       const channelType = client.channel_type || 'phone';
-      let trialRemaining = 0;
+      let balanceRemaining = 0;
+      let totalAllocation = 0;
 
-      if (channelType === 'phone') {
-        trialRemaining = Math.max(0, (client.trial_calls || 0) - (client.trial_calls_used || 0));
-      } else if (channelType === 'website') {
-        trialRemaining = Math.max(0, (client.trial_conversations || 0) - (client.trial_conversations_used || 0));
+      if (hasMinuteTracking) {
+        // NEW SYSTEM: Minute-based pricing
+        const isOnPaidPlan = !!client.paid_plan_type;
+
+        if (isOnPaidPlan) {
+          // Paid plan user
+          totalAllocation = client.paid_minutes_included || 0;
+          balanceRemaining = Math.max(0, totalAllocation - (client.paid_minutes_used || 0));
+        } else {
+          // Trial user
+          totalAllocation = client.trial_minutes || 30;
+          balanceRemaining = Math.max(0, totalAllocation - (client.trial_minutes_used || 0));
+        }
       } else {
-        // Both: total remaining
-        const callsLeft = Math.max(0, (client.trial_calls || 0) - (client.trial_calls_used || 0));
-        const convosLeft = Math.max(0, (client.trial_conversations || 0) - (client.trial_conversations_used || 0));
-        trialRemaining = callsLeft + convosLeft;
+        // OLD SYSTEM: Event-based (backwards compatibility)
+        if (channelType === 'phone') {
+          balanceRemaining = Math.max(0, (client.trial_calls || 0) - (client.trial_calls_used || 0));
+          totalAllocation = client.trial_calls || 10;
+        } else if (channelType === 'website') {
+          balanceRemaining = Math.max(0, (client.trial_conversations || 0) - (client.trial_conversations_used || 0));
+          totalAllocation = client.trial_conversations || 10;
+        } else {
+          // Both: total remaining
+          const callsLeft = Math.max(0, (client.trial_calls || 0) - (client.trial_calls_used || 0));
+          const convosLeft = Math.max(0, (client.trial_conversations || 0) - (client.trial_conversations_used || 0));
+          balanceRemaining = callsLeft + convosLeft;
+          totalAllocation = (client.trial_calls || 10) + (client.trial_conversations || 10);
+        }
       }
 
       setCreditData({
-        balance: trialRemaining,
-        credits: trialRemaining
+        balance: balanceRemaining,
+        credits: balanceRemaining
       });
 
-      // Pricing based on THIS client's channel type
-      // base_calls = total trial allocation (not hardcoded 20)
-      const totalTrialAllocation = channelType === 'phone' ? (client.trial_calls || 10)
-                                  : channelType === 'website' ? (client.trial_conversations || 10)
-                                  : (client.trial_calls || 10) + (client.trial_conversations || 10);
-
+      // NEW PRICING (November 1, 2025) - Minute-based plans
       setPricingConfig({
-        base_price: channelType === 'phone' ? 49 : channelType === 'website' ? 39 : 69,
-        per_call_price: channelType === 'both' ? 1.50 : channelType === 'phone' ? 2.00 : 1.50,
-        base_calls: totalTrialAllocation,
+        base_price: hasMinuteTracking
+          ? (client.paid_plan_type === 'website' ? 99 : client.paid_plan_type === 'phone' ? 129 : client.paid_plan_type === 'complete' ? 179 : 0)
+          : (channelType === 'phone' ? 49 : channelType === 'website' ? 39 : 69),
+        per_call_price: hasMinuteTracking ? 0.15 : (channelType === 'both' ? 1.50 : channelType === 'phone' ? 2.00 : 1.50),
+        base_calls: totalAllocation,
         currency: currency.code
       });
 

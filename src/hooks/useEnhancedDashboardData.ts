@@ -15,9 +15,9 @@ interface EnhancedDashboardData {
   topIntent: string | null;
   intentDistribution: { intent: string; count: number }[];
 
-  // Time patterns
+  // Time patterns (UPDATED Nov 1, 2025)
   peakHour: number | null;
-  callsByHour: { hour: number; calls: number }[];
+  callsByHour: { hour: number; calls: number; minutes: number }[]; // Added minutes field
 
   // Transfer metrics
   transferRate: number;
@@ -49,11 +49,12 @@ export function useEnhancedDashboardData(clientId: string | null, region: string
       setLoading(true);
       setError(null);
 
-      // Fetch all call sessions for this month
+      // Fetch all sessions for this month (BOTH phone + website)
       const startOfMonth = new Date();
       startOfMonth.setDate(1);
       startOfMonth.setHours(0, 0, 0, 0);
 
+      // Fetch phone calls
       const { data: calls, error: callsError } = await supabase
         .from('call_sessions')
         .select('*')
@@ -62,6 +63,19 @@ export function useEnhancedDashboardData(clientId: string | null, region: string
         .order('created_at', { ascending: false });
 
       if (callsError) throw callsError;
+
+      // Fetch website chats
+      const { data: chats, error: chatsError } = await supabase
+        .from('chat_sessions')
+        .select('*')
+        .eq('client_id', clientId)
+        .gte('created_at', startOfMonth.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (chatsError) throw chatsError;
+
+      // Combine both for total activity count
+      const totalSessions = (calls?.length || 0) + (chats?.length || 0);
 
       if (!calls || calls.length === 0) {
         setData({
@@ -109,17 +123,37 @@ export function useEnhancedDashboardData(clientId: string | null, region: string
         .sort((a, b) => b.count - a.count);
       const topIntent = intentDistribution[0]?.intent || null;
 
-      // Peak hour analysis
-      const hourCounts = new Map<number, number>();
-      calls.forEach(call => {
+      // Peak hour analysis (UPDATED: Now includes minutes from BOTH calls + chats)
+      const hourData = new Map<number, { calls: number; minutes: number }>();
+
+      // Process phone calls
+      (calls || []).forEach(call => {
         const hour = new Date(call.start_time).getHours();
-        hourCounts.set(hour, (hourCounts.get(hour) || 0) + 1);
+        const minutes = Math.ceil((call.duration_seconds || 0) / 60); // Round UP
+        const existing = hourData.get(hour) || { calls: 0, minutes: 0 };
+        hourData.set(hour, {
+          calls: existing.calls + 1,
+          minutes: existing.minutes + minutes
+        });
       });
-      const callsByHour = Array.from(hourCounts.entries())
-        .map(([hour, calls]) => ({ hour, calls }))
+
+      // Process website chats
+      (chats || []).forEach(chat => {
+        const hour = new Date(chat.start_time).getHours();
+        const minutes = Math.ceil((chat.duration_seconds || 0) / 60); // Round UP
+        const existing = hourData.get(hour) || { calls: 0, minutes: 0 };
+        hourData.set(hour, {
+          calls: existing.calls + 1,
+          minutes: existing.minutes + minutes
+        });
+      });
+
+      const callsByHour = Array.from(hourData.entries())
+        .map(([hour, data]) => ({ hour, calls: data.calls, minutes: data.minutes }))
         .sort((a, b) => a.hour - b.hour);
+
       const peakHour = callsByHour.length > 0
-        ? callsByHour.reduce((max, curr) => curr.calls > max.calls ? curr : max).hour
+        ? callsByHour.reduce((max, curr) => curr.minutes > max.minutes ? curr : max).hour
         : null;
 
       // Transfer metrics

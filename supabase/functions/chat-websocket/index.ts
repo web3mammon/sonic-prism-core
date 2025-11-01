@@ -98,7 +98,9 @@ serve(async (req) => {
 
       // Determine rejection message based on reason
       let rejectionMessage = '';
-      if (accessCheck.reason === 'trial_expired_time') {
+      if (accessCheck.reason === 'trial_minutes_exhausted') {
+        rejectionMessage = 'You have reached your trial limit. Please upgrade your account to continue.';
+      } else if (accessCheck.reason === 'trial_expired_time') {
         rejectionMessage = 'Your 3-day free trial has expired. Please visit your dashboard to upgrade your plan and continue using our service.';
       } else if (accessCheck.reason === 'trial_expired_credits') {
         rejectionMessage = 'You have used all 10 free trial chats. Please visit your dashboard to upgrade your plan and continue chatting.';
@@ -872,7 +874,13 @@ async function saveSessionToDatabase(sessionId: string) {
 
     console.log('[Database] Chat session saved:', chatId);
 
-    // Increment trial_conversations_used (website chat completed)
+    // ========================================
+    // MINUTE-BASED TRACKING (NEW - Nov 1, 2025)
+    // ========================================
+    await trackMinuteUsage(session.clientId, duration, supabaseClient);
+
+    // OLD: Increment trial_conversations_used (website chat completed)
+    // TODO: Remove this after minute tracking is stable (keep for 2 weeks)
     try {
       const { data: clientData } = await supabaseClient
         .from('voice_ai_clients')
@@ -1078,6 +1086,92 @@ Examples:
 }
 
 // ============================================================================
+// MINUTE-BASED PRICING TRACKING (NEW - November 1, 2025)
+// ============================================================================
+
+/**
+ * Track minute usage for chat sessions (minute-based pricing)
+ * Increments trial_minutes_used or paid_minutes_used depending on client's plan
+ */
+async function trackMinuteUsage(clientId: string, durationSeconds: number, supabaseClient: any): Promise<void> {
+  try {
+    // Calculate minutes (always round UP - partial minutes count as full minutes)
+    const minutes = Math.ceil(durationSeconds / 60);
+    console.log(`[Minutes] Chat duration: ${durationSeconds}s = ${minutes} minute(s)`);
+
+    // Fetch current client data to check plan status
+    const { data: clientData, error: fetchError } = await supabaseClient
+      .from('voice_ai_clients')
+      .select('client_id, trial_minutes, trial_minutes_used, paid_plan, paid_minutes_used, paid_minutes_included')
+      .eq('client_id', clientId)
+      .single();
+
+    if (fetchError || !clientData) {
+      console.error('[Minutes] Failed to fetch client data:', fetchError);
+      return;
+    }
+
+    // Determine if user is on trial or paid plan
+    const isOnTrial = !clientData.paid_plan; // FALSE = trial user
+    const currentMinutesUsed = isOnTrial ? (clientData.trial_minutes_used || 0) : (clientData.paid_minutes_used || 0);
+    const newMinutesUsed = currentMinutesUsed + minutes;
+
+    if (isOnTrial) {
+      // Update trial minutes
+      const { error: updateError } = await supabaseClient
+        .from('voice_ai_clients')
+        .update({
+          trial_minutes_used: newMinutesUsed,
+          updated_at: new Date().toISOString()
+        })
+        .eq('client_id', clientId);
+
+      if (updateError) {
+        console.error('[Minutes] Failed to update trial_minutes_used:', updateError);
+      } else {
+        const remaining = (clientData.trial_minutes || 30) - newMinutesUsed;
+        console.log(`[Minutes] ✅ Trial usage updated: ${newMinutesUsed}/${clientData.trial_minutes || 30} minutes (${remaining} remaining)`);
+
+        // Warn if trial is almost exhausted
+        if (remaining <= 5 && remaining > 0) {
+          console.warn(`[Minutes] ⚠️ Trial almost exhausted for ${clientId}: ${remaining} minutes left`);
+        } else if (remaining <= 0) {
+          console.warn(`[Minutes] ⚠️ Trial EXHAUSTED for ${clientId}`);
+        }
+      }
+    } else {
+      // Update paid plan minutes
+      const { error: updateError } = await supabaseClient
+        .from('voice_ai_clients')
+        .update({
+          paid_minutes_used: newMinutesUsed,
+          updated_at: new Date().toISOString()
+        })
+        .eq('client_id', clientId);
+
+      if (updateError) {
+        console.error('[Minutes] Failed to update paid_minutes_used:', updateError);
+      } else {
+        const included = clientData.paid_minutes_included || 0;
+        const remaining = included - newMinutesUsed;
+        const overage = remaining < 0 ? Math.abs(remaining) : 0;
+
+        console.log(`[Minutes] ✅ Paid usage updated: ${newMinutesUsed}/${included} minutes (Paid plan active)`);
+
+        if (overage > 0) {
+          console.warn(`[Minutes] ⚠️ OVERAGE for ${clientId}: ${overage} minutes over plan limit`);
+        } else if (remaining <= 50) {
+          console.warn(`[Minutes] ⚠️ Plan almost exhausted for ${clientId}: ${remaining} minutes left`);
+        }
+      }
+    }
+
+  } catch (error) {
+    console.error('[Minutes] Error tracking minute usage:', error);
+  }
+}
+
+// ============================================================================
 // FLEXPRICE INTEGRATION FUNCTIONS
 // ============================================================================
 
@@ -1096,10 +1190,37 @@ async function checkUserAccess(client: any): Promise<{ allowed: boolean; reason:
       }
     }
 
-    // 2. No paid subscription → check TRIAL status (per-client credits in database)
+    // 2. No paid subscription → check TRIAL status
     console.log('[Access] No active subscription - checking trial status...');
 
-    // 2a. Check credits (from voice_ai_clients.credits - per-client, not per-user)
+    // 2a. CHECK MINUTE-BASED LIMITS (NEW - Nov 1, 2025)
+    const hasMinuteTracking = client.trial_minutes !== undefined && client.trial_minutes !== null;
+
+    if (hasMinuteTracking) {
+      if (!client.paid_plan) {
+        // Trial user - check minute limit
+        const minutesUsed = client.trial_minutes_used || 0;
+        const minutesTotal = client.trial_minutes || 30;
+
+        if (minutesUsed >= minutesTotal) {
+          console.log(`[Access] ❌ Trial minutes exhausted: ${minutesUsed}/${minutesTotal}`);
+          return { allowed: false, reason: 'trial_minutes_exhausted' };
+        }
+
+        console.log(`[Access] ✅ Trial minutes available: ${minutesTotal - minutesUsed}/${minutesTotal} remaining`);
+        return { allowed: true, reason: 'trial_minutes_active' };
+      } else {
+        // Paid user - always allow (overage tracked separately)
+        const minutesUsed = client.paid_minutes_used || 0;
+        const minutesIncluded = client.paid_minutes_included || 0;
+        const overage = Math.max(0, minutesUsed - minutesIncluded);
+
+        console.log(`[Access] ✅ Paid plan active: ${minutesUsed}/${minutesIncluded} minutes used${overage > 0 ? ` (${overage} overage)` : ''}`);
+        return { allowed: true, reason: 'paid_plan_active' };
+      }
+    }
+
+    // 2b. Fallback: OLD event-based credits system (backwards compatibility)
     const credits = client.credits || 0;
     if (credits < 1) {
       console.log(`[Access] Trial credits exhausted (${credits} remaining)`);

@@ -87,31 +87,73 @@ export default function Dashboard() {
     });
   }, [client?.channel_type, currencyInfo.code]);
 
-  // Per-client trial tracking (from voice_ai_clients table)
-  const channelType = client?.channel_type || 'phone';
-  let trialRemaining = 0;
+  // ========================================
+  // MINUTE-BASED USAGE TRACKING (NEW - Nov 1, 2025)
+  // ========================================
+  // Check if client has minute tracking data (new signups) or event tracking (existing users)
+  const hasMinuteTracking = client?.trial_minutes !== undefined && client?.trial_minutes !== null;
+  const channelType = client?.channel_type || 'phone'; // Used throughout component
 
-  if (channelType === 'phone') {
-    trialRemaining = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
-  } else if (channelType === 'website') {
-    trialRemaining = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
+  let minutesRemaining = 0;
+  let minutesUsed = 0;
+  let minutesTotal = 0;
+  let isOnPaidPlan = false;
+
+  // Cost calculation for minute-based pricing (NEW - Nov 1, 2025)
+  let costText = '$0.00';
+
+  if (hasMinuteTracking) {
+    // NEW SYSTEM: Minute-based pricing
+    isOnPaidPlan = !!client?.paid_plan;
+
+    if (isOnPaidPlan) {
+      // Paid plan user
+      minutesTotal = client?.paid_minutes_included || 0;
+      minutesUsed = client?.paid_minutes_used || 0;
+      minutesRemaining = Math.max(0, minutesTotal - minutesUsed);
+
+      // Calculate cost for paid users
+      if (minutesUsed <= minutesTotal) {
+        costText = 'Included in Base Package';
+      } else {
+        const overageMinutes = minutesUsed - minutesTotal;
+        const overageRate = channelType === 'both' ? 0.12 : 0.15; // Complete: $0.12/min, Single: $0.15/min
+        const overageCost = overageMinutes * overageRate;
+        costText = `Overusage: $${overageCost.toFixed(2)}`;
+      }
+    } else {
+      // Trial user - free
+      minutesTotal = client?.trial_minutes || 30;
+      minutesUsed = client?.trial_minutes_used || 0;
+      minutesRemaining = Math.max(0, minutesTotal - minutesUsed);
+      costText = '$0.00';
+    }
   } else {
-    // Both: total remaining
-    const callsLeft = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
-    const convosLeft = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
-    trialRemaining = callsLeft + convosLeft;
+    // OLD SYSTEM: Event-based (backwards compatibility for existing users)
+    let eventCountRemaining = 0;
+
+    if (channelType === 'phone') {
+      eventCountRemaining = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
+    } else if (channelType === 'website') {
+      eventCountRemaining = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
+    } else {
+      // Both: total remaining
+      const callsLeft = Math.max(0, (client?.trial_calls || 0) - (client?.trial_calls_used || 0));
+      const convosLeft = Math.max(0, (client?.trial_conversations || 0) - (client?.trial_conversations_used || 0));
+      eventCountRemaining = callsLeft + convosLeft;
+    }
+
+    // Map event counts to legacy display (will be removed after migration)
+    minutesRemaining = eventCountRemaining;
   }
 
-  // TODO: Fetch FlexPrice credits when trial ends
-  // For now, we show trial credits. After trial ends (trialRemaining === 0),
-  // we need to fetch from FlexPrice API and show paid credit balance
-  const isTrialActive = trialRemaining > 0;
+  const isTrialActive = minutesRemaining > 0 && !isOnPaidPlan;
 
   const creditData = {
-    balance: trialRemaining, // TODO: Add FlexPrice balance after trial
+    balance: minutesRemaining,
     currency: currencyInfo.code,
     currencySymbol: currencyInfo.symbol,
-    callsRemaining: trialRemaining, // TODO: Add FlexPrice balance after trial
+    callsRemaining: minutesRemaining, // Legacy field name kept for compatibility
     callsThisMonth: enhancedData?.callsThisMonth || stats?.callsThisMonth || 0,
     averageCallCost: pricingConfig?.per_call_price || 2.00,
     lowBalanceThreshold: 5,
@@ -127,7 +169,8 @@ export default function Dashboard() {
   const handleTestCall = () => navigate('./testing');
   const handleCustomerData = () => navigate('./call-data');
   const handleTopUp = () => navigate('./billing');
-  const handleViewUsage = () => navigate('./call-data');
+  const handleViewCallLogs = () => navigate('./call-data');
+  const handleViewChatLogs = () => navigate('./chat-data');
   const handleSetupGuide = () => setIsSetupModalOpen(true);
 
   // Load voice profile for AI Persona Card
@@ -222,14 +265,18 @@ export default function Dashboard() {
             <AlertTriangle className="h-4 w-4 text-primary" />
             <AlertDescription className="font-medium">
               <span className="text-primary">
-                {channelType === 'phone' ? 'Call' :
-                 channelType === 'website' ? 'Conversation' :
-                 'Trial'} limits approaching.
+                {hasMinuteTracking
+                  ? (isOnPaidPlan ? 'Plan minutes' : 'Trial minutes')
+                  : (channelType === 'phone' ? 'Call' :
+                     channelType === 'website' ? 'Conversation' :
+                     'Trial')} limits approaching.
               </span> You have {creditData.callsRemaining} {
-                channelType === 'phone' ? 'call' :
-                channelType === 'website' ? 'conversation' :
-                'credit'
-              }{creditData.callsRemaining !== 1 ? 's' : ''} remaining.{' '}
+                hasMinuteTracking
+                  ? `minute${creditData.callsRemaining !== 1 ? 's' : ''}`
+                  : `${channelType === 'phone' ? 'call' :
+                       channelType === 'website' ? 'conversation' :
+                       'credit'}${creditData.callsRemaining !== 1 ? 's' : ''}`
+              } remaining.{' '}
               <Button variant="link" className="text-primary font-medium p-0 ml-1 h-auto underline" onClick={handleTopUp}>
                 Please upgrade to continue
               </Button>
@@ -308,7 +355,7 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Calls This Month - REAL */}
+        {/* Usage This Month - REAL */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -322,23 +369,27 @@ export default function Dashboard() {
           </div>
           <div>
             <AnimatedNumber
-              value={enhancedData?.callsThisMonth || 0}
+              value={hasMinuteTracking ? minutesUsed : (enhancedData?.callsThisMonth || 0)}
               className="text-4xl font-extralight"
             />
             <p className="text-sm text-muted-foreground mt-1">
-              {channelType === 'phone' ? 'Calls This Month' :
-               channelType === 'website' ? 'Conversations This Month' :
-               'Calls/Conversations This Month'}
+              {hasMinuteTracking
+                ? 'Minutes Used This Month'
+                : (channelType === 'phone' ? 'Calls This Month' :
+                   channelType === 'website' ? 'Conversations This Month' :
+                   'Calls/Conversations This Month')}
             </p>
             <p className="text-xs text-muted-foreground/60 mt-1">
-              {channelType === 'phone' ? 'total calls' :
-               channelType === 'website' ? 'total conversations' :
-               'total interactions'}
+              {hasMinuteTracking
+                ? `${minutesTotal} total available`
+                : (channelType === 'phone' ? 'total calls' :
+                   channelType === 'website' ? 'total conversations' :
+                   'total interactions')}
             </p>
           </div>
         </motion.div>
 
-        {/* Calls Remaining - REAL */}
+        {/* Remaining Balance - REAL */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -352,16 +403,18 @@ export default function Dashboard() {
           </div>
           <div>
             <AnimatedNumber
-              value={creditData.callsRemaining}
+              value={minutesRemaining}
               className="text-4xl font-extralight text-green-500"
             />
             <p className="text-sm text-muted-foreground mt-1">
-              {channelType === 'phone' ? 'Calls Remaining' :
-               channelType === 'website' ? 'Conversations Remaining' :
-               'Calls/Conversations Remaining'}
+              {hasMinuteTracking
+                ? 'Minutes Remaining'
+                : (channelType === 'phone' ? 'Calls Remaining' :
+                   channelType === 'website' ? 'Conversations Remaining' :
+                   'Calls/Conversations Remaining')}
             </p>
             <p className="text-xs text-muted-foreground/60 mt-1">
-              {creditData.isTrialActive ? 'in free trial' : 'paid credits'}
+              {creditData.isTrialActive ? 'in free trial' : 'paid plan'}
             </p>
           </div>
         </motion.div>
@@ -408,7 +461,9 @@ export default function Dashboard() {
         >
           <div className="flex items-center gap-2 mb-6">
             <BarChart3 className="h-5 w-5 text-primary" />
-            <h3 className="text-lg font-medium">Call Volume by Hour</h3>
+            <h3 className="text-lg font-medium">
+              {hasMinuteTracking ? 'Activity by Hour' : 'Call Volume by Hour'}
+            </h3>
           </div>
           {enhancedData && enhancedData.callsByHour.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
@@ -430,9 +485,19 @@ export default function Dashboard() {
                     borderRadius: '8px',
                     color: theme === 'dark' ? '#fff' : '#000'
                   }}
+                  itemStyle={{
+                    color: theme === 'dark' ? '#fff' : '#000'
+                  }}
+                  labelStyle={{
+                    color: theme === 'dark' ? '#fff' : '#000'
+                  }}
                   labelFormatter={(hour) => `${hour}:00`}
+                  formatter={(value, name) => {
+                    if (name === 'minutes') return [`${value} min`, 'Minutes Used'];
+                    return [value, name];
+                  }}
                 />
-                <Bar dataKey="calls" radius={[8, 8, 0, 0]}>
+                <Bar dataKey={hasMinuteTracking ? "minutes" : "calls"} radius={[8, 8, 0, 0]}>
                   {enhancedData?.callsByHour.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
@@ -493,12 +558,14 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm text-muted-foreground">This Month</p>
                 <p className="text-lg font-medium mt-1">
-                  <AnimatedNumber value={creditData.callsThisMonth} />
+                  <AnimatedNumber value={hasMinuteTracking ? minutesUsed : creditData.callsThisMonth} />
                 </p>
                 <p className="text-xs text-muted-foreground/60 mt-1">
-                  {channelType === 'phone' ? 'total calls' :
-                   channelType === 'website' ? 'total conversations' :
-                   'total interactions'}
+                  {hasMinuteTracking
+                    ? 'minutes used'
+                    : (channelType === 'phone' ? 'total calls' :
+                       channelType === 'website' ? 'total conversations' :
+                       'total interactions')}
                 </p>
               </div>
               <Activity className="h-8 w-8 text-primary/30" />
@@ -519,23 +586,38 @@ export default function Dashboard() {
             <div className="flex items-center gap-2 mb-4">
               <CreditCard className="h-5 w-5 text-primary" />
               <h3 className="text-lg font-medium">
-                {channelType === 'phone' ? 'Calls Remaining' :
-                 channelType === 'website' ? 'Conversations Remaining' :
-                 'Trial Balance'}
+                {hasMinuteTracking
+                  ? (isOnPaidPlan ? 'Plan Minutes' : 'Trial Minutes')
+                  : (channelType === 'phone' ? 'Calls Remaining' :
+                     channelType === 'website' ? 'Conversations Remaining' :
+                     'Trial Balance')}
               </h3>
             </div>
-            <AnimatedNumber
-              value={creditData.balance}
-              decimals={0}
-              className="text-4xl font-extralight"
-            />
-            <p className="text-sm text-muted-foreground mt-2">
-              {creditData.callsRemaining} {
-                channelType === 'phone' ? 'call' :
-                channelType === 'website' ? 'conversation' :
-                'call/conversation'
-              }{creditData.callsRemaining !== 1 ? 's' : ''} available
-            </p>
+            {hasMinuteTracking ? (
+              <>
+                <div className="text-4xl font-extralight">
+                  {minutesRemaining} <span className="text-2xl text-muted-foreground">minutes remaining</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {minutesUsed} of {minutesTotal} minutes used
+                </p>
+              </>
+            ) : (
+              <>
+                <AnimatedNumber
+                  value={creditData.balance}
+                  decimals={0}
+                  className="text-4xl font-extralight"
+                />
+                <p className="text-sm text-muted-foreground mt-2">
+                  {creditData.callsRemaining} {
+                    `${channelType === 'phone' ? 'call' :
+                         channelType === 'website' ? 'conversation' :
+                         'call/conversation'}${creditData.callsRemaining !== 1 ? 's' : ''}`
+                  } available
+                </p>
+              </>
+            )}
           </div>
 
           <div className="md:col-span-2">
@@ -546,16 +628,20 @@ export default function Dashboard() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  {channelType === 'phone' ? 'Calls used this month' :
-                   channelType === 'website' ? 'Conversations this month' :
-                   'Usage this month'}
+                  {hasMinuteTracking
+                    ? 'Minutes used this month'
+                    : (channelType === 'phone' ? 'Calls used this month' :
+                       channelType === 'website' ? 'Conversations this month' :
+                       'Usage this month')}
                 </span>
                 <span className="font-semibold">
-                  {creditData.callsThisMonth} {
-                    channelType === 'phone' ? 'calls' :
-                    channelType === 'website' ? 'conversations' :
-                    'interactions'
-                  }
+                  {hasMinuteTracking
+                    ? `${minutesUsed} ${minutesUsed !== 1 ? 'minutes' : 'minute'}`
+                    : `${creditData.callsThisMonth} ${
+                        channelType === 'phone' ? 'calls' :
+                        channelType === 'website' ? 'conversations' :
+                        'interactions'
+                      }`}
                 </span>
               </div>
               <div className="relative h-3">
@@ -569,17 +655,29 @@ export default function Dashboard() {
               </div>
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>{callsUsedPercentage.toFixed(1)}% of capacity</span>
-                <span>Est. {creditData.currencySymbol}{(creditData.callsThisMonth * creditData.averageCallCost).toFixed(2)}</span>
+                <span>
+                  {hasMinuteTracking
+                    ? costText
+                    : `Est. ${creditData.currencySymbol}${(creditData.callsThisMonth * creditData.averageCallCost).toFixed(2)}`}
+                </span>
               </div>
             </div>
             {isClient && (
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" size="sm" onClick={handleViewUsage} className="flex-1">
-                  View Usage History
-                </Button>
-                <ModernButton variant="gradient" size="sm" onClick={handleTopUp} className="flex-1">
-                  Top Up Credits
-                </ModernButton>
+              <div className="flex justify-end gap-3 pt-4">
+                {channelType === 'both' ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={handleViewCallLogs}>
+                      View Call Logs
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleViewChatLogs}>
+                      View Chat Logs
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={channelType === 'phone' ? handleViewCallLogs : handleViewChatLogs}>
+                    {channelType === 'phone' ? 'View Call Logs' : 'View Chat Logs'}
+                  </Button>
+                )}
               </div>
             )}
           </div>
