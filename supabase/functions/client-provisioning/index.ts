@@ -56,7 +56,7 @@ serve(async (req) => {
       );
     }
 
-    // Step 1: Generate client_id and client_slug
+    // Step 1: Generate client_id, client_slug, and clientname (URL-safe)
     const client_id = generateClientId(
       requestData.region,
       requestData.industry,
@@ -66,8 +66,15 @@ serve(async (req) => {
     // client_slug is used for URL routing: /region/industry/businessslug
     const client_slug = `${requestData.region.toLowerCase()}_${getIndustryCode(requestData.industry)}_${requestData.business_name.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 20)}`;
 
+    // clientname: URL-safe version of business name (removes spaces, special chars)
+    // "Y Combinator" → "ycombinator"
+    // "Martin's Kitchen" → "martinskitchen"
+    // "Wave Apps" → "waveapps"
+    const clientname = requestData.business_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+
     console.log('[ClientProvisioning] Generated client_id:', client_id);
     console.log('[ClientProvisioning] Generated client_slug:', client_slug);
+    console.log('[ClientProvisioning] Generated clientname:', clientname);
 
     // Step 2: Get voice_id (use provided or default based on region)
     const voice_id = requestData.voice_id || getDefaultVoiceId(requestData.region);
@@ -173,6 +180,7 @@ serve(async (req) => {
       .insert({
         client_id: client_id,
         client_slug: client_slug,
+        clientname: clientname, // URL-safe business name for routing
         user_id: requestData.user_id,
         business_name: requestData.business_name,
         region: requestData.region,
@@ -196,7 +204,7 @@ serve(async (req) => {
         target_audience: requestData.target_audience || null,
         tone: requestData.tone || 'professional',
       })
-      .select('client_id, client_slug, user_id, business_name, region, industry, phone_number, voice_id, greeting_message, system_prompt, timezone, business_hours, channel_type, status, trial_minutes, trial_minutes_used, created_at, website_url, services_offered, pricing_info, target_audience, tone')
+      .select('client_id, client_slug, clientname, user_id, business_name, region, industry, phone_number, voice_id, greeting_message, system_prompt, timezone, business_hours, channel_type, status, trial_minutes, trial_minutes_used, created_at, website_url, services_offered, pricing_info, target_audience, tone')
       .single();
 
     if (clientError) {

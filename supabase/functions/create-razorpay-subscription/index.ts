@@ -61,6 +61,20 @@ Deno.serve(async (req) => {
 
     console.log('[CreateSubscription] Creating Razorpay subscription with plan:', razorpayPlanId);
 
+    // Get client info for redirect URL
+    const { data: clientData } = await supabaseClient
+      .from('voice_ai_clients')
+      .select('region, industry, clientname')
+      .eq('client_id', client_id)
+      .single();
+
+    // Build redirect URL back to dashboard after payment
+    const redirectUrl = clientData
+      ? `https://app.klariqo.com/${clientData.region.toLowerCase()}/${clientData.industry}/${clientData.clientname}/billing?payment=success`
+      : `https://app.klariqo.com`;
+
+    console.log('[CreateSubscription] Redirect URL after payment:', redirectUrl);
+
     // Create subscription
     const subscriptionOptions = {
       plan_id: razorpayPlanId,
@@ -71,7 +85,11 @@ Deno.serve(async (req) => {
         plan_id: plan_id, // Our internal plan_id (e.g., 'website_500_yearly')
         user_id: user_id,
         client_id: client_id,
-        business_name: business_name || 'N/A'
+        business_name: business_name || 'N/A',
+        redirect_url: redirectUrl // Store for reference
+      },
+      notify_info: {
+        notify_email: user_email || undefined
       }
     };
 

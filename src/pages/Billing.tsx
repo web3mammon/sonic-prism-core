@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AnimatedNumber } from "@/components/ui/animated-number";
 import { ModernButton } from "@/components/ui/modern-button";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useToast } from "@/hooks/use-toast";
 import {
   CreditCard,
   TrendingUp,
@@ -21,11 +22,30 @@ import {
 } from "lucide-react";
 
 export default function Billing() {
-  const { client, loading } = useCurrentClient();
+  const { client, loading, refetch } = useCurrentClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { toast } = useToast();
 
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
+
+  // Check for payment success in URL
+  useEffect(() => {
+    const paymentStatus = searchParams.get('payment');
+    if (paymentStatus === 'success') {
+      toast({
+        title: "Payment Successful!",
+        description: "Your subscription is being activated. Please refresh in a few seconds.",
+      });
+      // Remove payment param from URL
+      setSearchParams({});
+      // Refetch client data after 2 seconds
+      setTimeout(() => {
+        refetch?.();
+      }, 2000);
+    }
+  }, [searchParams]);
 
   if (loading) {
     return (
