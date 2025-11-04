@@ -30,7 +30,7 @@ export default function Login() {
       try {
         const { data, error } = await supabase
           .from('voice_ai_clients')
-          .select('region, industry, business_name, status')
+          .select('client_slug, status')
           .eq('user_id', user.id)
           .single();
 
@@ -69,7 +69,7 @@ export default function Login() {
 
   // Redirect if already authenticated AND has client
   if (user && profile && !fetchingClient && clientData) {
-    const dashboardUrl = `/${clientData.region.toLowerCase()}/${clientData.industry}/${clientData.business_name.toLowerCase()}`;
+    const dashboardUrl = `/${clientData.client_slug.replace(/_/g, '/')}`;
     console.log('[Login] Redirecting to dashboard:', dashboardUrl);
     return <Navigate to={dashboardUrl} replace />;
   }

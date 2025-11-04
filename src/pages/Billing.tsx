@@ -7,6 +7,7 @@ import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   CreditCard,
   TrendingUp,
@@ -27,25 +28,7 @@ export default function Billing() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
 
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
-
-  // Check for payment success in URL
-  useEffect(() => {
-    const paymentStatus = searchParams.get('payment');
-    if (paymentStatus === 'success') {
-      toast({
-        title: "Payment Successful!",
-        description: "Your subscription is being activated. Please refresh in a few seconds.",
-      });
-      // Remove payment param from URL
-      setSearchParams({});
-      // Refetch client data after 2 seconds
-      setTimeout(() => {
-        refetch?.();
-      }, 2000);
-    }
-  }, [searchParams]);
+  const [isProcessingCheckout, setIsProcessingCheckout] = useState(false);
 
   if (loading) {
     return (
@@ -111,53 +94,62 @@ export default function Billing() {
     : 'N/A';
 
   const handleUpgradePlan = async (targetPlanId: string) => {
-    setPaymentProcessing(true);
-    setPaymentError(null);
+    console.log('[Billing] Creating checkout for plan:', targetPlanId);
+
+    setIsProcessingCheckout(true);
 
     try {
-      console.log('[Billing] Creating Razorpay subscription for plan:', targetPlanId);
-
-      // Step 1: Create Razorpay subscription
-      const subscriptionResponse = await fetch('https://btqccksigmohyjdxgrrj.supabase.co/functions/v1/create-razorpay-subscription', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          plan_id: targetPlanId,
-          user_id: client?.user_id,
-          client_id: client?.client_id,
-          business_name: client?.business_name
-        })
-      });
-
-      if (!subscriptionResponse.ok) {
-        const errorData = await subscriptionResponse.json();
-        throw new Error(errorData.error || 'Failed to create subscription');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "Please log in to upgrade your plan",
+          variant: "destructive"
+        });
+        return;
       }
 
-      const { subscription_id, short_url, status } = await subscriptionResponse.json();
+      // Call edge function to create DodoPayments checkout session
+      const { data, error } = await supabase.functions.invoke('create-dodo-checkout', {
+        body: {
+          plan_id: targetPlanId,
+          user_id: user.id
+        }
+      });
 
-      console.log('[Billing] ✅ Subscription created:', subscription_id);
-      console.log('[Billing] Payment URL:', short_url);
+      if (error || !data?.checkout_url) {
+        console.error('[Billing] Checkout creation failed:', error);
+        toast({
+          title: "Error",
+          description: "Failed to create checkout session. Please try again.",
+          variant: "destructive"
+        });
+        setIsProcessingCheckout(false);
+        return;
+      }
 
-      // Step 2: Redirect to Razorpay hosted payment page
-      // The webhook will handle subscription activation when payment succeeds
-      window.location.href = short_url;
+      console.log('[Billing] Redirecting to checkout:', data.checkout_url);
 
-    } catch (error) {
-      console.error('[Billing] ❌ Subscription creation error:', error);
-      setPaymentError(error instanceof Error ? error.message : 'Failed to create subscription');
-      setPaymentProcessing(false);
+      // Redirect to DodoPayments hosted checkout
+      window.location.href = data.checkout_url;
+
+    } catch (error: any) {
+      console.error('[Billing] Error:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to process checkout",
+        variant: "destructive"
+      });
+      setIsProcessingCheckout(false);
     }
   };
 
   const handleCancelSubscription = () => {
-    // TODO: Implement cancel subscription
-    console.log('Cancel subscription');
+    console.log('[Billing] Cancel subscription - TODO');
   };
 
   const handleDownloadInvoice = () => {
-    // TODO: Implement FlexPrice invoice download
-    console.log('Download invoice');
+    console.log('[Billing] Download invoice - TODO');
   };
 
   return (
@@ -330,11 +322,6 @@ export default function Billing() {
         )}
 
         {/* Upgrade/Downgrade Buttons */}
-        {paymentError && (
-          <div className="p-4 rounded-xl border border-red-500/20 bg-red-500/5 text-red-500 text-sm">
-            {paymentError}
-          </div>
-        )}
 
         <div className="flex flex-col gap-3">
           {!isPaidUser && (
@@ -349,11 +336,20 @@ export default function Billing() {
                                     client?.channel_type === 'website' ? 'website_500' : 'phone_500';
                     handleUpgradePlan(basePlan);
                   }}
-                  disabled={paymentProcessing}
+                  disabled={isProcessingCheckout}
                 >
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Upgrade to Monthly
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  {isProcessingCheckout ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="h-4 w-4 mr-2" />
+                      Upgrade to Monthly
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </>
+                  )}
                 </ModernButton>
                 <div className="relative flex-1">
                   <ModernButton
@@ -364,11 +360,20 @@ export default function Billing() {
                                       client?.channel_type === 'website' ? 'website_500' : 'phone_500';
                       handleUpgradePlan(`${basePlan}_yearly`);
                     }}
-                    disabled={paymentProcessing}
+                    disabled={isProcessingCheckout}
                   >
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Upgrade to Yearly
-                    <ArrowRight className="h-4 w-4 ml-2" />
+                    {isProcessingCheckout ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Upgrade to Yearly
+                        <ArrowRight className="h-4 w-4 ml-2" />
+                      </>
+                    )}
                   </ModernButton>
                   <div className="absolute -top-3 right-2 px-2 py-0.5 rounded-md bg-green-500 text-white text-xs font-medium whitespace-nowrap">
                     Get 2 months free
@@ -389,11 +394,20 @@ export default function Billing() {
                     const basePlan = planId?.replace('_yearly', '') || '';
                     handleUpgradePlan(`${basePlan}_yearly`);
                   }}
-                  disabled={paymentProcessing}
+                  disabled={isProcessingCheckout}
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Upgrade to Yearly Plan
-                  <ArrowRight className="h-4 w-4 ml-2" />
+                  {isProcessingCheckout ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Upgrade to Yearly Plan
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </>
+                  )}
                 </ModernButton>
                 <div className="absolute -top-3 right-2 px-2 py-0.5 rounded-md bg-green-500 text-white text-xs font-medium whitespace-nowrap">
                   Get 2 months free
@@ -408,8 +422,7 @@ export default function Billing() {
         {isPaidUser && (
           <button
             onClick={handleCancelSubscription}
-            disabled={paymentProcessing}
-            className="text-sm text-red-500 hover:text-red-600 underline underline-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-sm text-red-500 hover:text-red-600 underline underline-offset-2 transition-colors"
           >
             Cancel Subscription
           </button>

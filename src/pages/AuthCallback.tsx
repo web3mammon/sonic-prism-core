@@ -44,15 +44,15 @@ export default function AuthCallback() {
         // Find their client and redirect
         const { data: clients } = await supabase
           .from('voice_ai_clients')
-          .select('client_id, region, industry')
+          .select('client_slug')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (clients && clients.length > 0) {
           const client = clients[0];
-          const clientname = client.client_id.split('_').slice(2).join('_');
-          const url = `/${client.region}/${client.industry}/${clientname}`;
+          // Use client_slug and replace underscores with slashes
+          const url = `/${client.client_slug.replace(/_/g, '/')}`;
           console.log('[AuthCallback] Redirecting to existing dashboard:', url);
           navigate(url);
           return;
@@ -104,14 +104,22 @@ export default function AuthCallback() {
         .update({ onboarding_completed: true })
         .eq('user_id', user.id);
 
-      // 7. Build dashboard URL and redirect
-      const region = (onboardingData.business_location || 'US').toLowerCase();
-      const clientname = (onboardingData.business_name || 'business')
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-        .substring(0, 20);
+      // 7. Fetch the newly created client to get the client_slug
+      const { data: newClient, error: clientError } = await supabase
+        .from('voice_ai_clients')
+        .select('client_slug')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      const dashboardUrl = `/${region}/${onboardingData.industry}/${clientname}`;
+      if (clientError || !newClient) {
+        console.error('[AuthCallback] Error fetching newly created client:', clientError);
+        throw new Error('Failed to retrieve your dashboard URL. Please contact support.');
+      }
+
+      // Build dashboard URL using client_slug (replace underscores with slashes)
+      const dashboardUrl = `/${newClient.client_slug.replace(/_/g, '/')}`;
       console.log('[AuthCallback] Redirecting to dashboard:', dashboardUrl);
 
       // Celebrate with confetti

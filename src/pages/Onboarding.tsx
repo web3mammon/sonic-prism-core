@@ -504,14 +504,22 @@ export default function Onboarding() {
         .update({ onboarding_completed: true })
         .eq('user_id', user.id);
 
-      // 5. Build dashboard URL
-      const region = (state.analysis?.business_location || 'US').toLowerCase();
-      const clientname = (state.analysis?.business_name || 'business')
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-        .substring(0, 20);
+      // 5. Fetch the newly created client to get the client_slug
+      const { data: newClient, error: clientError } = await supabase
+        .from('voice_ai_clients')
+        .select('client_slug')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
 
-      const url = `/${region}/${industryCode}/${clientname}`;
+      if (clientError || !newClient) {
+        console.error('[Onboarding] Error fetching newly created client:', clientError);
+        throw new Error('Failed to retrieve your dashboard URL. Please contact support.');
+      }
+
+      // Build dashboard URL using client_slug (replace underscores with slashes)
+      const url = `/${newClient.client_slug.replace(/_/g, '/')}`;
       setDashboardUrl(url);
       setProvisioningState('success');
 

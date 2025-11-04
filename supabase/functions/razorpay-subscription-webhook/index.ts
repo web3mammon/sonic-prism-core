@@ -165,8 +165,16 @@ async function handleSubscriptionActivated(supabaseClient: any, subscription: an
   const billingCycleEnd = new Date();
   billingCycleEnd.setDate(billingCycleEnd.getDate() + plan.cycle_days);
 
+  console.log('[Webhook] 🔄 Updating database for client:', client_id);
+  console.log('[Webhook] Update values:', {
+    paid_plan: true,
+    plan_id: plan_id,
+    paid_minutes_included: plan.minutes,
+    paid_minutes_used: 0,
+  });
+
   // Update database: Activate paid plan
-  const { error } = await supabaseClient
+  const { error, data } = await supabaseClient
     .from('voice_ai_clients')
     .update({
       paid_plan: true,
@@ -177,14 +185,16 @@ async function handleSubscriptionActivated(supabaseClient: any, subscription: an
       billing_cycle_end: billingCycleEnd.toISOString(),
       updated_at: new Date().toISOString()
     })
-    .eq('client_id', client_id);
+    .eq('client_id', client_id)
+    .select();
 
   if (error) {
-    console.error('[Webhook] Database update failed:', error);
+    console.error('[Webhook] ❌ Database update failed:', error);
     throw error;
   }
 
   console.log('[Webhook] ✅ Subscription activated for client:', client_id);
+  console.log('[Webhook] 📊 Updated database record:', data);
 }
 
 // Handler: Subscription charged (recurring payment)

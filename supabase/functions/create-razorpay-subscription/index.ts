@@ -64,32 +64,34 @@ Deno.serve(async (req) => {
     // Get client info for redirect URL
     const { data: clientData } = await supabaseClient
       .from('voice_ai_clients')
-      .select('region, industry, clientname')
+      .select('region, industry, business_name')
       .eq('client_id', client_id)
       .single();
 
     // Build redirect URL back to dashboard after payment
-    const redirectUrl = clientData
-      ? `https://app.klariqo.com/${clientData.region.toLowerCase()}/${clientData.industry}/${clientData.clientname}/billing?payment=success`
-      : `https://app.klariqo.com`;
+    let redirectUrl = `https://app.klariqo.com`;
+    if (clientData) {
+      // Sanitize business_name for URL: remove spaces, keep only letters/numbers
+      const sanitizedName = clientData.business_name
+        .replace(/\s+/g, '') // Remove ALL spaces
+        .replace(/[^a-z0-9]/gi, '') // Keep only alphanumeric
+        .toLowerCase();
+      redirectUrl = `https://app.klariqo.com/${clientData.region.toLowerCase()}/${clientData.industry}/${sanitizedName}/billing?payment=success`;
+    }
 
     console.log('[CreateSubscription] Redirect URL after payment:', redirectUrl);
 
     // Create subscription
     const subscriptionOptions = {
       plan_id: razorpayPlanId,
-      customer_notify: 1, // Send email to customer
+      customer_notify: 0, // DON'T send email - we're using embedded checkout
       total_count: 12, // For yearly: 1 payment, for monthly: 12 payments (1 year)
       quantity: 1,
       notes: {
         plan_id: plan_id, // Our internal plan_id (e.g., 'website_500_yearly')
         user_id: user_id,
         client_id: client_id,
-        business_name: business_name || 'N/A',
-        redirect_url: redirectUrl // Store for reference
-      },
-      notify_info: {
-        notify_email: user_email || undefined
+        business_name: business_name || 'N/A'
       }
     };
 
@@ -98,13 +100,13 @@ Deno.serve(async (req) => {
     console.log('[CreateSubscription] ✅ Subscription created:', subscription.id);
     console.log('[CreateSubscription] Short URL:', subscription.short_url);
 
-    // Return subscription details (including short_url for payment)
+    // Return both subscription_id AND short_url
     return new Response(
       JSON.stringify({
         subscription_id: subscription.id,
         plan_id: plan_id,
         razorpay_plan_id: razorpayPlanId,
-        short_url: subscription.short_url, // Razorpay hosted payment page
+        short_url: subscription.short_url, // Fallback to hosted page
         status: subscription.status, // 'created'
       }),
       {

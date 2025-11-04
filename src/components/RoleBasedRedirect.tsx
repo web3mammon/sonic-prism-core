@@ -31,7 +31,7 @@ export const RoleBasedRedirect = ({ children }: RoleBasedRedirectProps) => {
 
         supabase
           .from('voice_ai_clients')
-          .select('region, industry, clientname, status')
+          .select('client_slug, status')
           .eq('user_id', user.id)
           .eq('status', 'active')
           .single()
@@ -46,7 +46,8 @@ export const RoleBasedRedirect = ({ children }: RoleBasedRedirectProps) => {
               navigate('/onboarding', { replace: true });
             } else {
               setClientData(data);
-              const dashboardUrl = `/${data.region}/${data.industry}/${data.clientname}`;
+              // Use client_slug and replace underscores with slashes
+              const dashboardUrl = `/${data.client_slug.replace(/_/g, '/')}`;
               navigate(dashboardUrl, { replace: true });
             }
           })

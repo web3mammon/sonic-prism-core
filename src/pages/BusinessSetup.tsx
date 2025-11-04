@@ -29,7 +29,8 @@ export default function BusinessSetup() {
 
   // Redirect to newly created client dashboard after successful setup
   if (clientInfo) {
-    const dashboardUrl = `/${clientInfo.region}/${clientInfo.industry}/${clientInfo.clientSlug}`;
+    // Use client_slug directly (replace underscores with slashes)
+    const dashboardUrl = `/${clientInfo.clientSlug.replace(/_/g, '/')}`;
     return <Navigate to={dashboardUrl} replace />;
   }
 
