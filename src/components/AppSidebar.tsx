@@ -157,7 +157,7 @@ export function AppSidebar() {
         <div className="px-4 py-6">
           {!isCollapsed && (
             <img
-              src={theme === 'dark' ? '/assets/images/klariqo-logov1-white.png' : '/assets/images/klariqo-logov1.png'}
+              src={theme === 'dark' ? '/assets/images/klariqo-white.svg' : '/assets/images/klariqo-black.svg'}
               alt="Klariqo"
               className="w-1/2 h-auto"
             />

@@ -163,7 +163,7 @@
 
             <!-- Verify Button -->
             <div class="button-container">
-                <a href="{{ .ConfirmationURL }}" class="verify-button">
+                <a href="https://app.klariqo.com/auth/verify?token_hash={{ .TokenHash }}&type=signup&redirect_to={{ .RedirectTo }}" class="verify-button">
                     Verify Email & Get Started
                 </a>
             </div>
@@ -173,7 +173,7 @@
             <!-- Alternative Link -->
             <p class="alternative-link">
                 Or copy and paste this link into your browser:<br>
-                <a href="{{ .ConfirmationURL }}" class="link">{{ .ConfirmationURL }}</a>
+                <a href="https://app.klariqo.com/auth/verify?token_hash={{ .TokenHash }}&type=signup&redirect_to={{ .RedirectTo }}" class="link">https://app.klariqo.com/auth/verify?token_hash={{ .TokenHash }}&type=signup</a>
             </p>
         </div>
 

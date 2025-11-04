@@ -156,23 +156,7 @@ serve(async (req) => {
     // Play intro audio (greeting message)
     await playIntroAudio(sessionId, socket, supabaseClient);
 
-    // Start Supabase keepalive to prevent 150s idle timeout (send ping every 30s)
-    const currentSession = sessions.get(sessionId);
-    if (currentSession) {
-      currentSession.supabaseKeepaliveTimer = setInterval(() => {
-        try {
-          socket.send(JSON.stringify({
-            type: 'ping',
-            timestamp: Date.now()
-          }));
-          console.log('[Supabase] Keepalive ping sent to prevent timeout');
-        } catch (error) {
-          console.error('[Supabase] Keepalive ping error:', error);
-        }
-      }, 30000); // Every 30 seconds
-    }
-
-    console.log(`[WebSocket] Session initialized: ${sessionId} - keepalive started`);
+    console.log(`[WebSocket] Session initialized: ${sessionId}`);
   };
 
   socket.onmessage = async (event) => {
@@ -522,8 +506,8 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
                         text: sentenceChunk
                       }));
 
-                      // Generate TTS immediately (not awaited, just like Shopify)
-                      generateSpeechChunk(sessionId, sentenceChunk, socket, audioChunkIndex++);
+                      // Generate TTS sequentially to guarantee chunk order
+                      await generateSpeechChunk(sessionId, sentenceChunk, socket, audioChunkIndex++);
                       textBuffer = remainingText;
                     }
                   }

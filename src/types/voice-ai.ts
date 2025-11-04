@@ -32,6 +32,7 @@ export interface VoiceAIClient {
   trial_minutes?: number;
   trial_minutes_used?: number;
   paid_plan?: boolean;  // TRUE = paid user, FALSE = trial user
+  plan_id?: string | null;  // FlexPrice plan ID (e.g., 'website_500_yearly')
   paid_minutes_included?: number;
   paid_minutes_used?: number;
   billing_cycle_start?: string;

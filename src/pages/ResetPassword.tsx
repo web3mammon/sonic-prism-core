@@ -12,21 +12,55 @@ export default function ResetPassword() {
   const [searchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isValidToken, setIsValidToken] = useState(false);
   const { toast } = useToast();
 
-  // Check for access token in URL params
+  // Check for token_hash (new branded flow) or access token (old flow)
+  const tokenHash = searchParams.get('token_hash');
+  const type = searchParams.get('type');
   const accessToken = searchParams.get('access_token');
   const refreshToken = searchParams.get('refresh_token');
 
   useEffect(() => {
-    if (accessToken && refreshToken) {
-      // Set the session with the tokens from the URL
-      supabase.auth.setSession({
-        access_token: accessToken,
-        refresh_token: refreshToken,
-      });
-    }
-  }, [accessToken, refreshToken]);
+    const handleTokenVerification = async () => {
+      // New flow: token_hash parameter (from branded email)
+      if (tokenHash && type) {
+        setIsVerifying(true);
+        try {
+          const { data, error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: type as 'recovery',
+          });
+
+          if (error) throw error;
+
+          console.log('[ResetPassword] ✅ Token verified, session established');
+          setIsValidToken(true);
+        } catch (error: any) {
+          console.error('[ResetPassword] Token verification failed:', error);
+          toast({
+            title: "Invalid Reset Link",
+            description: "This password reset link is invalid or has expired.",
+            variant: "destructive",
+          });
+          setIsValidToken(false);
+        } finally {
+          setIsVerifying(false);
+        }
+      }
+      // Old flow: access_token parameter (backward compatibility)
+      else if (accessToken && refreshToken) {
+        await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        });
+        setIsValidToken(true);
+      }
+    };
+
+    handleTokenVerification();
+  }, [tokenHash, type, accessToken, refreshToken, toast]);
 
   const handleResetPassword = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -81,13 +115,31 @@ export default function ResetPassword() {
     return <Navigate to="/auth" replace />;
   }
 
-  if (!accessToken || !refreshToken) {
+  // Show loading while verifying token
+  if (isVerifying) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="absolute top-4 right-4">
           <ThemeToggle />
         </div>
-        
+
+        <div className="w-full max-w-md text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-500 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold mb-2">Verifying reset link...</h2>
+          <p className="text-[#a0a0a0]">Please wait</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if no valid token found
+  if (!isValidToken && !tokenHash && !accessToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
+
         <div className="w-full max-w-md">
           <div className="text-center pb-8">
             <h2 className="text-4xl font-light mb-2">Invalid Reset Link</h2>

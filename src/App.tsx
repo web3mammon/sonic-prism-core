@@ -28,6 +28,7 @@ import System from "./pages/System";
 import BusinessDetails from "./pages/BusinessDetails";
 import Integrations from "./pages/Integrations";
 import Billing from "./pages/Billing";
+// import BillingPayment from "./pages/BillingPayment"; // Removed: Payment now handled directly on /billing page
 import Leads from "./pages/Leads";
 import Calendar from "./pages/Calendar";
 import Auth from "./pages/Auth";
@@ -37,6 +38,7 @@ import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import Onboarding from "./pages/Onboarding";
 import AuthCallback from "./pages/AuthCallback";
+import AuthVerify from "./pages/AuthVerify";
 
 const queryClient = new QueryClient();
 
@@ -58,6 +60,7 @@ const App = () => (
                   <Route path="/login" element={<Login />} />
                   <Route path="/auth" element={<Auth />} /> {/* Legacy - redirects handled in Auth.tsx */}
                   <Route path="/auth/callback" element={<AuthCallback />} /> {/* Email verification callback */}
+                  <Route path="/auth/verify" element={<AuthVerify />} /> {/* Custom email verification with branding */}
                   <Route path="/business-setup" element={<BusinessSetup />} /> {/* Legacy - kept for existing users */}
                   <Route path="/reset-password" element={<ResetPassword />} />
 
@@ -99,6 +102,7 @@ const App = () => (
                           <Route path="/business-details" element={<BusinessDetails />} />
                           <Route path="/integrations" element={<Integrations />} />
                           <Route path="/billing" element={<Billing />} />
+                          {/* <Route path="/billing/payment" element={<BillingPayment />} /> */}
                           <Route path="/calendar" element={<Calendar />} />
                           <Route path="/leads" element={<Leads />} />
                           <Route path="/testing" element={<Testing />} />

@@ -79,6 +79,7 @@ export function useCurrentClient(): CurrentClientData {
             trial_minutes: clientData.trial_minutes,
             trial_minutes_used: clientData.trial_minutes_used || 0,
             paid_plan: clientData.paid_plan,
+            plan_id: clientData.plan_id || null,  // NEW: FlexPrice plan ID
             paid_minutes_included: clientData.paid_minutes_included || 0,
             paid_minutes_used: clientData.paid_minutes_used || 0,
             billing_cycle_start: clientData.billing_cycle_start,

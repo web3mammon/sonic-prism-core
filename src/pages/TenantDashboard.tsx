@@ -8,6 +8,7 @@ import { AnimatedNumber } from "@/components/ui/animated-number";
 import { StatusDot } from "@/components/ui/status-dot";
 import { LiveCallMonitor } from "@/components/voice-ai/LiveCallMonitor";
 import { SetupModal } from "@/components/modals/SetupModal";
+import { OverageAlert } from "@/components/billing/OverageAlert";
 import { useAuth } from "@/hooks/useAuth";
 import { useCurrentClient } from "@/hooks/useCurrentClient";
 import { useClientDashboardStats } from "@/hooks/useClientDashboardStats";
@@ -263,6 +264,22 @@ export default function Dashboard() {
               </Button>
             </AlertDescription>
           </Alert>
+        </motion.div>
+      )}
+
+      {/* Overage Alert (Paid users only) */}
+      {isOnPaidPlan && minutesUsed > minutesTotal && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <OverageAlert
+            minutesTotal={minutesTotal}
+            overageRate={channelType === 'both' ? 0.12 : 0.15}
+            channelType={channelType}
+            dismissible={true}
+          />
         </motion.div>
       )}
 

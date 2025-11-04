@@ -433,22 +433,6 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         return;
       }
 
-      // Start Supabase keepalive to prevent 150s idle timeout (send ping every 30s)
-      const currentSession = sessions.get(callSid);
-      if (currentSession) {
-        currentSession.supabaseKeepaliveTimer = setInterval(() => {
-          try {
-            socket.send(JSON.stringify({
-              event: 'ping',
-              timestamp: Date.now()
-            }));
-            console.log('[Supabase] Keepalive ping sent to prevent timeout');
-          } catch (error) {
-            console.error('[Supabase] Keepalive ping error:', error);
-          }
-        }, 30000); // Every 30 seconds
-      }
-
       // Play pre-recorded intro immediately (instant, pre-warms connections)
       if (client.intro_audio_file) {
         console.log('[Twilio] Playing pre-recorded intro audio');
@@ -676,8 +660,8 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
                     if (sentenceChunk) {
                       console.log(`[GPT-Stream] Sentence: "${sentenceChunk}"`);
 
-                      // Generate TTS immediately (fire and forget for low latency)
-                      generateAndStreamTTS(callSid, sentenceChunk, socket, audioChunkIndex++);
+                      // Generate TTS sequentially to guarantee chunk order
+                      await generateAndStreamTTS(callSid, sentenceChunk, socket, audioChunkIndex++);
                       textBuffer = remainingText;
                     }
                   }

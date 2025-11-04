@@ -1406,7 +1406,7 @@ export default function Onboarding() {
       <header className="py-6 relative z-50">
         <div className="flex justify-center">
           <img
-            src="/assets/images/klariqo-logov1-white.png"
+            src="/assets/images/klariqo-white.svg"
             alt="Klariqo"
             className="h-8 md:h-10"
           />

@@ -132,7 +132,7 @@ export default function Login() {
       <div className="absolute top-6 left-6">
         <Link to="/">
           <img
-            src="/assets/images/klariqo-logov1-white.png"
+            src="/assets/images/klariqo-white.svg"
             alt="Klariqo"
             className="h-8"
           />
