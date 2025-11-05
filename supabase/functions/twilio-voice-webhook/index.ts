@@ -1493,7 +1493,7 @@ async function trackMinuteUsage(session: TwilioVoiceSession, durationSeconds: nu
     // Fetch current client data to check plan status
     const { data: clientData, error: fetchError } = await session.supabase
       .from('voice_ai_clients')
-      .select('client_id, trial_minutes, trial_minutes_used, paid_plan, paid_minutes_used, paid_minutes_included')
+      .select('client_id, trial_minutes, trial_minutes_used, paid_plan, paid_minutes_used, paid_minutes_included, dodo_customer_id')
       .eq('client_id', session.client.client_id)
       .single();
 
@@ -1553,6 +1553,31 @@ async function trackMinuteUsage(session: TwilioVoiceSession, durationSeconds: nu
           console.warn(`[Minutes] ⚠️ OVERAGE for ${session.client.client_id}: ${overage} minutes over plan limit`);
         } else if (remaining <= 50) {
           console.warn(`[Minutes] ⚠️ Plan almost exhausted for ${session.client.client_id}: ${remaining} minutes left`);
+        }
+
+        // CRITICAL: Send usage to DodoPayments for overage billing
+        // Only for paid customers with dodo_customer_id
+        if (clientData.paid_plan && clientData.dodo_customer_id) {
+          try {
+            console.log(`[DodoUsage] Sending ${minutes} minutes to DodoPayments for ${session.client.client_id}`);
+
+            const { error: ingestError } = await session.supabase.functions.invoke('ingest-call-usage', {
+              body: {
+                client_id: session.client.client_id,
+                minutes_used: minutes
+              }
+            });
+
+            if (ingestError) {
+              console.error('[DodoUsage] Failed to send usage to DodoPayments:', ingestError);
+            } else {
+              console.log('[DodoUsage] ✅ Usage sent to DodoPayments successfully');
+            }
+          } catch (error) {
+            console.error('[DodoUsage] Error calling ingest-call-usage:', error);
+          }
+        } else {
+          console.log('[DodoUsage] Skipping - Trial user or no dodo_customer_id');
         }
       }
     }
