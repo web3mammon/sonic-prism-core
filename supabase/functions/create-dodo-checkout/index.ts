@@ -5,17 +5,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// DodoPayments Product IDs
+// DodoPayments Product IDs (LIVE)
 const DODO_PRODUCT_IDS: Record<string, string> = {
   // Monthly plans
-  'website_500': 'pdt_ABqx90dGsO2YehkmU2ttv',
-  'phone_500': 'pdt_e2IyQOH03s1enigxdDGoE',
-  'complete_1000': 'pdt_qZS77xzZNszAlFRgI6633',
+  'website_500': 'pdt_vPl7lvha88Z5mjeHDOIJh',
+  'phone_500': 'pdt_KY4VpaJa0GOwxgDESAZxF',
+  'complete_1000': 'pdt_0Mn5pSTW2HWHnKbb1YYop',
 
   // Yearly plans
-  'website_500_yearly': 'pdt_ld4wnP3zQyXjxttRV2Isc',
-  'phone_500_yearly': 'pdt_s8K0Jh96YZvJiPGnpwbvV',
-  'complete_1000_yearly': 'pdt_rpaQU3uc22UJ0VgrD3ewA'
+  'website_500_yearly': 'pdt_1HwDDvcfNmvzTjeu33YhE',
+  'phone_500_yearly': 'pdt_BtUtBsqNA0c8CnEAJFdOB',
+  'complete_1000_yearly': 'pdt_TRt71ITlKteKc6HwAhXK6'
 };
 
 Deno.serve(async (req) => {
@@ -72,7 +72,7 @@ Deno.serve(async (req) => {
     console.log('[CreateDodoCheckout] Creating checkout for product:', dodoProductId);
 
     // Create checkout session with DodoPayments
-    const dodoApiKey = Deno.env.get('DODO_API_TEST_KEY') ?? '';
+    const dodoApiKey = Deno.env.get('DODO_API_KEY') ?? '';
     const appUrl = Deno.env.get('APP_URL') ?? 'https://app.klariqo.com';
 
     // Build client-specific return URL
@@ -112,8 +112,8 @@ Deno.serve(async (req) => {
 
     console.log('[CreateDodoCheckout] DodoPayments API request:', JSON.stringify(checkoutRequest, null, 2));
 
-    // Use test.dodopayments.com for test mode
-    const apiUrl = 'https://test.dodopayments.com/checkouts';
+    // Use live.dodopayments.com for production
+    const apiUrl = 'https://live.dodopayments.com/checkouts';
     console.log('[CreateDodoCheckout] API URL:', apiUrl);
 
     const response = await fetch(apiUrl, {

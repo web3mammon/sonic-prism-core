@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const DODO_METER_ID = 'mtr_gJI07WnP3uSpWAZ7FcebV';
+const DODO_METER_ID = 'mtr_uaY8t2CPrkBHCJVvVAqeU'; // LIVE meter ID
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     console.log('[IngestCallUsage] Ingesting usage for customer:', client.dodo_customer_id);
 
     // Send usage to DodoPayments meter
-    const dodoApiKey = Deno.env.get('DODO_API_TEST_KEY') ?? '';
+    const dodoApiKey = Deno.env.get('DODO_API_KEY') ?? '';
 
     const usageRequest = {
       meter_id: DODO_METER_ID,
@@ -69,8 +69,8 @@ Deno.serve(async (req) => {
 
     console.log('[IngestCallUsage] DodoPayments usage request:', JSON.stringify(usageRequest, null, 2));
 
-    // Use test.dodopayments.com for test mode
-    const apiUrl = 'https://test.dodopayments.com/events/ingest';
+    // Use live.dodopayments.com for production
+    const apiUrl = 'https://live.dodopayments.com/events/ingest';
     console.log('[IngestCallUsage] API URL:', apiUrl);
 
     const response = await fetch(apiUrl, {
