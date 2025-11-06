@@ -23,7 +23,6 @@ interface VoiceSession {
   deepgramConnection: WebSocket | null;
   isProcessing: boolean;
   deepgramKeepaliveTimer: number | null;
-  supabaseKeepaliveTimer: number | null;
 }
 
 const sessions = new Map<string, VoiceSession>();
@@ -73,55 +72,11 @@ serve(async (req) => {
   socket.onopen = async () => {
     console.log(`[WebSocket] Connected - Session: ${sessionId}`);
 
-    // Load voice profile
-    let voiceProfile = null;
-    if (client.voice_id) {
-      const { data: profile, error: profileError } = await supabaseClient
-        .from('voice_profiles')
-        .select('*')
-        .eq('voice_id', client.voice_id)
-        .single();
-
-      if (profileError) {
-        console.error('[WebSocket] Failed to load voice profile:', profileError);
-      } else {
-        voiceProfile = profile;
-        console.log(`[WebSocket] ✅ Voice profile loaded: ${profile.name} (${profile.accent})`);
-      }
-    }
-
-    // Check user access (trial + subscription logic)
-    const accessCheck = await checkUserAccess(client);
-
-    if (!accessCheck.allowed) {
-      console.log(`[Access] ❌ Access denied - ${accessCheck.reason}`);
-
-      // Determine rejection message based on reason
-      let rejectionMessage = '';
-      if (accessCheck.reason === 'trial_minutes_exhausted') {
-        rejectionMessage = 'You have reached your trial limit. Please upgrade your account to continue.';
-      } else if (accessCheck.reason === 'trial_expired_time') {
-        rejectionMessage = 'Your 3-day free trial has expired. Please visit your dashboard to upgrade your plan and continue using our service.';
-      } else if (accessCheck.reason === 'trial_expired_credits') {
-        rejectionMessage = 'You have used all 10 free trial chats. Please visit your dashboard to upgrade your plan and continue chatting.';
-      } else {
-        rejectionMessage = 'Your account has run out of credits. Please visit your dashboard to add more credits or upgrade your plan.';
-      }
-
-      socket.send(JSON.stringify({
-        type: 'error',
-        message: rejectionMessage
-      }));
-      socket.close();
-      return;
-    }
-
-    console.log(`[Access] ✅ Access granted - ${accessCheck.reason}`);
-
+    // Create session immediately (minimal blocking)
     const session: VoiceSession = {
       clientId: clientId,
       client: client,
-      voiceProfile, // Voice profile from database
+      voiceProfile: null, // Load in background
       chatId: null,
       transcript: [],
       startTime: Date.now(),
@@ -129,12 +84,11 @@ serve(async (req) => {
       deepgramConnection: null,
       isProcessing: false,
       deepgramKeepaliveTimer: null,
-      supabaseKeepaliveTimer: null,
     };
 
     sessions.set(sessionId, session);
 
-    // Initialize Deepgram connection
+    // Initialize Deepgram connection FIRST (critical path)
     const deepgramReady = await initializeDeepgram(sessionId, socket);
 
     if (!deepgramReady) {
@@ -147,16 +101,64 @@ serve(async (req) => {
       return;
     }
 
+    // Send connection established immediately
     socket.send(JSON.stringify({
       type: 'connection.established',
       sessionId,
       message: `${client.business_name} Voice AI ready`
     }));
 
-    // Play intro audio (greeting message)
-    await playIntroAudio(sessionId, socket, supabaseClient);
-
     console.log(`[WebSocket] Session initialized: ${sessionId}`);
+
+    // Background operations (non-blocking)
+    // Load voice profile in background
+    if (client.voice_id) {
+      supabaseClient
+        .from('voice_profiles')
+        .select('*')
+        .eq('voice_id', client.voice_id)
+        .single()
+        .then(({ data: profile, error: profileError }) => {
+          if (profileError) {
+            console.error('[WebSocket] Failed to load voice profile:', profileError);
+          } else {
+            session.voiceProfile = profile;
+            console.log(`[WebSocket] ✅ Voice profile loaded: ${profile.name} (${profile.accent})`);
+          }
+        });
+    }
+
+    // Check user access in background
+    checkUserAccess(client).then(accessCheck => {
+      if (!accessCheck.allowed) {
+        console.log(`[Access] ❌ Access denied - ${accessCheck.reason}`);
+
+        // Determine rejection message based on reason
+        let rejectionMessage = '';
+        if (accessCheck.reason === 'trial_minutes_exhausted') {
+          rejectionMessage = 'You have reached your trial limit. Please upgrade your account to continue.';
+        } else if (accessCheck.reason === 'trial_expired_time') {
+          rejectionMessage = 'Your 3-day free trial has expired. Please visit your dashboard to upgrade your plan and continue using our service.';
+        } else if (accessCheck.reason === 'trial_expired_credits') {
+          rejectionMessage = 'You have used all 10 free trial chats. Please visit your dashboard to upgrade your plan and continue chatting.';
+        } else {
+          rejectionMessage = 'Your account has run out of credits. Please visit your dashboard to add more credits or upgrade your plan.';
+        }
+
+        socket.send(JSON.stringify({
+          type: 'error',
+          message: rejectionMessage
+        }));
+        socket.close();
+      } else {
+        console.log(`[Access] ✅ Access granted - ${accessCheck.reason}`);
+      }
+    });
+
+    // Play intro audio in background
+    playIntroAudio(sessionId, socket, supabaseClient).catch(err =>
+      console.error('[IntroAudio] Background play error:', err)
+    );
   };
 
   socket.onmessage = async (event) => {
@@ -218,40 +220,42 @@ serve(async (req) => {
       clearInterval(session.deepgramKeepaliveTimer);
       console.log('[Deepgram] Keepalive timer cleared');
     }
-    if (session?.supabaseKeepaliveTimer) {
-      clearInterval(session.supabaseKeepaliveTimer);
-      console.log('[Supabase] Keepalive timer cleared');
-    }
 
     await saveSessionToDatabase(sessionId);
 
+    // Fire-and-forget cleanup operations (non-blocking)
     // Extract and save lead information from conversation
     if (session && session.conversationHistory.length > 0) {
-      await extractAndSaveLead(session);
+      extractAndSaveLead(session).catch(err => console.error('[Lead] Background extraction error:', err));
+
+      // Process calendar booking if conversation contains booking intent
+      processCalendarBooking(session, sessionId, supabaseClient).catch(err =>
+        console.error('[Booking] Background booking error:', err)
+      );
     }
 
     // Deduct 1 credit from client's balance (per-client credits in database)
     if (session && session.client) {
-      try {
-        const { error } = await supabaseClient
-          .from('voice_ai_clients')
-          .update({ credits: Math.max(0, (session.client.credits || 0) - 1) })
-          .eq('client_id', session.clientId);
-
-        if (error) {
-          console.error('[Credits] Failed to deduct credit:', error);
-        } else {
-          console.log(`[Credits] Deducted 1 credit from client ${session.clientId} (${session.client.credits} → ${session.client.credits - 1})`);
-        }
-      } catch (error) {
-        console.error('[Credits] Error deducting credit:', error);
-      }
+      supabaseClient
+        .from('voice_ai_clients')
+        .update({ credits: Math.max(0, (session.client.credits || 0) - 1) })
+        .eq('client_id', session.clientId)
+        .then(({ error }) => {
+          if (error) {
+            console.error('[Credits] Failed to deduct credit:', error);
+          } else {
+            console.log(`[Credits] Deducted 1 credit from client ${session.clientId} (${session.client.credits} → ${session.client.credits - 1})`);
+          }
+        })
+        .catch(err => console.error('[Credits] Error deducting credit:', err));
     }
 
     // Track usage event in FlexPrice (for paid plans analytics - future)
     if (session && session.chatId && session.client.user_id) {
       const duration = Math.floor((Date.now() - session.startTime) / 1000);
-      await trackFlexPriceEvent(session.client.user_id, session.chatId, duration);
+      trackFlexPriceEvent(session.client.user_id, session.chatId, duration).catch(err =>
+        console.error('[FlexPrice] Background tracking error:', err)
+      );
     }
 
     if (session?.deepgramConnection) {
@@ -334,17 +338,10 @@ async function initializeDeepgram(sessionId: string, clientSocket: WebSocket): P
           if (transcript && transcript.trim()) {
             console.log(`[Deepgram] ${isFinal ? 'Final' : 'Interim'}: ${transcript}`);
 
-            // Send appropriate event based on finality
+            // Only send final transcripts to widget (interim not needed for chat display)
             if (isFinal) {
-              // Final transcript - user's speech recognized
               clientSocket.send(JSON.stringify({
                 type: 'transcript.user',
-                text: transcript
-              }));
-            } else {
-              // Interim transcript - still listening
-              clientSocket.send(JSON.stringify({
-                type: 'transcript.interim',
                 text: transcript
               }));
             }
@@ -439,10 +436,11 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
         messages,
-        max_tokens: 150,
+        max_tokens: 500,
         temperature: 0.7,
         stream: true
-      })
+      }),
+      signal: AbortSignal.timeout(30000) // 30 second timeout
     });
 
     if (!response.ok) {
@@ -533,121 +531,8 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
 
     const aiResponse = fullResponse || 'I apologize, I didn\'t catch that.';
 
-    // ======================================
-    // CHECK FOR APPOINTMENT BOOKING REQUEST
-    // ======================================
-    if (aiResponse.includes('BOOKING_APPOINTMENT')) {
-      console.log('[Booking] AI requested appointment booking');
-
-      try {
-        // Extract booking details from AI response
-        const bookingSection = aiResponse.split('BOOKING_APPOINTMENT')[1];
-        const dateMatch = bookingSection.match(/DATE:\s*(\d{4}-\d{2}-\d{2})/);
-        const startTimeMatch = bookingSection.match(/START_TIME:\s*(\d{2}:\d{2})/);
-        const endTimeMatch = bookingSection.match(/END_TIME:\s*(\d{2}:\d{2})/);
-        const nameMatch = bookingSection.match(/CUSTOMER_NAME:\s*(.+)/);
-        const phoneMatch = bookingSection.match(/CUSTOMER_PHONE:\s*(.+)/);
-        const emailMatch = bookingSection.match(/CUSTOMER_EMAIL:\s*(.+)/);
-        const serviceMatch = bookingSection.match(/SERVICE:\s*(.+)/);
-        const notesMatch = bookingSection.match(/NOTES:\s*(.+)/);
-
-        if (dateMatch && startTimeMatch && endTimeMatch && nameMatch) {
-          const date = dateMatch[1].trim();
-          const startTime = startTimeMatch[1].trim();
-          const endTime = endTimeMatch[1].trim();
-          const customerName = nameMatch[1].trim();
-          const customerPhone = phoneMatch ? phoneMatch[1].trim() : null;
-          const customerEmail = emailMatch ? emailMatch[1].trim() : session.visitorEmail || null;
-          const service = serviceMatch ? serviceMatch[1].trim() : 'General appointment';
-          const notes = notesMatch ? notesMatch[1].trim() : '';
-
-          console.log('[Booking] Parsed booking details:', {
-            date,
-            startTime,
-            endTime,
-            customerName,
-            customerEmail,
-            service
-          });
-
-          // Get Supabase client
-          const { createClient } = await import("https://esm.sh/@supabase/supabase-js@2");
-          const supabaseClient = createClient(
-            Deno.env.get('SUPABASE_URL') ?? '',
-            Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-          );
-
-          // Call calendar-integration function to create booking
-          const { data: bookingData, error: bookingError } = await supabaseClient.functions.invoke('calendar-integration', {
-            body: {
-              action: 'create_booking',
-              client_id: session.client.client_id,
-              customer_name: customerName,
-              customer_phone: customerPhone,
-              customer_email: customerEmail,
-              start_time: `${date}T${startTime}:00`,
-              end_time: `${date}T${endTime}:00`,
-              service_type: service,
-              notes: notes,
-              session_id: sessionId,
-              source: 'website',
-              lead_id: session.lead_id || null
-            }
-          });
-
-          if (bookingError) {
-            console.error('[Booking] ❌ Error creating appointment:', bookingError);
-
-            // Notify customer of booking failure
-            const errorMessage = "I apologize, but I'm having trouble scheduling your appointment right now. Let me take down your information and someone from our team will call you back to confirm your booking.";
-
-            socket.send(JSON.stringify({
-              type: 'text.chunk',
-              text: errorMessage
-            }));
-
-            await generateSpeechChunk(sessionId, errorMessage, socket, audioChunkIndex++);
-
-            session.transcript.push({
-              role: 'assistant',
-              content: errorMessage,
-              timestamp: new Date().toISOString(),
-              message_type: 'booking_error'
-            });
-          } else {
-            console.log('[Booking] ✅ Appointment created successfully:', bookingData);
-
-            // Confirm booking to customer
-            const confirmMessage = `Perfect! I've scheduled your appointment for ${service} on ${date} at ${startTime}. You'll receive a confirmation shortly. Is there anything else I can help you with?`;
-
-            socket.send(JSON.stringify({
-              type: 'text.chunk',
-              text: confirmMessage
-            }));
-
-            await generateSpeechChunk(sessionId, confirmMessage, socket, audioChunkIndex++);
-
-            // Log booking in conversation
-            session.transcript.push({
-              role: 'assistant',
-              content: confirmMessage,
-              timestamp: new Date().toISOString(),
-              message_type: 'booking_confirmation',
-              metadata: bookingData
-            });
-          }
-        } else {
-          console.warn('[Booking] ⚠️  Missing required booking details in AI response');
-        }
-      } catch (bookingError) {
-        console.error('[Booking] ❌ Booking processing failed:', bookingError);
-      }
-    }
-
-    socket.send(JSON.stringify({
-      type: 'text.complete',
-      text: aiResponse
-    }));
+    // Don't send text.complete - widget doesn't use it
+    // Widget displays messages via text.chunk only
 
     socket.send(JSON.stringify({
       type: 'audio.complete',
@@ -918,6 +803,24 @@ CONVERSATION STYLE (CRITICAL - FOLLOW EXACTLY):
 - Use simple, clear language - avoid jargon unless necessary
 - Ask ONE question at a time if you need clarification
 
+LEAD CAPTURE (IMPORTANT - BUT CHILL ABOUT IT):
+**DO NOT ask for contact info right away!** Let the conversation flow naturally first.
+
+TIMING - Only ask for contact info AFTER:
+- You've had at least 3-5 back-and-forth exchanges with the customer
+- They've shown genuine interest in a service or asked meaningful questions
+- The conversation is going well and you've built some rapport
+- It feels NATURAL to ask (not forced)
+
+How to ask (casually):
+- Good: "By the way, I didn't catch your name?"
+- Good: "Oh, and what's your number? I'll make a note of it"
+- Good: "Want me to email that to you? What's your email?"
+- Bad: "I need your name and email" (too direct/pushy)
+- Bad: Asking in the first message (way too aggressive!)
+
+**Remember**: The goal is to HELP them first, capture info second. Build trust naturally.
+
 FORMATTING RULES (MUST FOLLOW):
 - NEVER use tables, bullet points, or formatted lists
 - NEVER use markdown formatting (**, __, etc.)
@@ -1156,6 +1059,150 @@ async function trackMinuteUsage(clientId: string, durationSeconds: number, supab
 
   } catch (error) {
     console.error('[Minutes] Error tracking minute usage:', error);
+  }
+}
+
+// ============================================================================
+// CALENDAR BOOKING FUNCTIONS (Non-blocking - processed at end of call)
+// ============================================================================
+
+/**
+ * Process calendar booking intent from conversation (runs in background at end of call)
+ * Uses separate LLM call to extract booking details, then creates appointment
+ */
+async function processCalendarBooking(session: any, sessionId: string, supabaseClient: any): Promise<void> {
+  const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+  if (!GROQ_API_KEY) {
+    console.log('[Booking] Groq API key not found, skipping booking check');
+    return;
+  }
+
+  try {
+    // Build conversation transcript for analysis
+    const transcript = session.conversationHistory
+      .map((msg: any) => `${msg.role === 'user' ? 'Customer' : 'AI'}: ${msg.content}`)
+      .join('\n');
+
+    console.log('[Booking] Analyzing conversation for booking intent...');
+
+    // Use LLM to check if conversation contains booking request
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-70b-versatile',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a booking extraction assistant. Analyze the conversation and determine if the customer wants to book an appointment.
+
+If YES, extract the booking details and return a JSON object:
+{
+  "has_booking": true,
+  "customer_name": "name if mentioned",
+  "customer_email": "email if mentioned",
+  "customer_phone": "phone if mentioned",
+  "date": "YYYY-MM-DD format if date mentioned",
+  "start_time": "HH:MM format (24-hour) if time mentioned",
+  "end_time": "HH:MM format (24-hour), estimate 1 hour duration if not specified",
+  "service": "type of service/appointment requested",
+  "notes": "any additional notes or requirements mentioned"
+}
+
+If NO booking intent, return: {"has_booking": false}
+
+Examples:
+- "I'd like to book a haircut for tomorrow at 3pm" → has_booking: true
+- "What are your hours?" → has_booking: false
+- "Can I schedule a consultation?" → has_booking: true (even without date/time - we'll follow up)`
+          },
+          {
+            role: 'user',
+            content: `Analyze this conversation for booking intent:\n\n${transcript}`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 300,
+        signal: AbortSignal.timeout(30000)
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+
+    if (!response.ok) {
+      console.error('[Booking] Groq API error:', response.status);
+      return;
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content?.trim();
+
+    if (!content) {
+      console.log('[Booking] No content returned from LLM');
+      return;
+    }
+
+    // Parse JSON response
+    let bookingData;
+    try {
+      bookingData = JSON.parse(content);
+    } catch (e) {
+      console.error('[Booking] Failed to parse LLM response:', content);
+      return;
+    }
+
+    // Check if there's a booking intent
+    if (!bookingData.has_booking) {
+      console.log('[Booking] No booking intent detected in conversation');
+      return;
+    }
+
+    console.log('[Booking] ✅ Booking intent detected:', bookingData);
+
+    // Validate we have minimum required info (at least customer name or contact info)
+    if (!bookingData.customer_name && !bookingData.customer_email && !bookingData.customer_phone) {
+      console.log('[Booking] ⚠️ Booking intent detected but no customer contact info - saving as pending lead');
+      // This will be captured by extractAndSaveLead function
+      return;
+    }
+
+    // Create the appointment via calendar-integration function
+    const bookingPayload = {
+      action: 'create_booking',
+      client_id: session.client.client_id,
+      customer_name: bookingData.customer_name || 'Unknown',
+      customer_phone: bookingData.customer_phone || null,
+      customer_email: bookingData.customer_email || null,
+      start_time: bookingData.date && bookingData.start_time
+        ? `${bookingData.date}T${bookingData.start_time}:00`
+        : null,
+      end_time: bookingData.date && bookingData.end_time
+        ? `${bookingData.date}T${bookingData.end_time}:00`
+        : null,
+      service_type: bookingData.service || 'General appointment',
+      notes: bookingData.notes || '',
+      session_id: sessionId,
+      source: 'website_chat',
+      status: (bookingData.date && bookingData.start_time) ? 'confirmed' : 'pending'
+    };
+
+    console.log('[Booking] Creating appointment:', bookingPayload);
+
+    const { data: result, error: bookingError } = await supabaseClient.functions.invoke(
+      'calendar-integration',
+      { body: bookingPayload }
+    );
+
+    if (bookingError) {
+      console.error('[Booking] ❌ Failed to create appointment:', bookingError);
+    } else {
+      console.log('[Booking] ✅ Appointment created successfully:', result);
+    }
+
+  } catch (error) {
+    console.error('[Booking] Error during booking processing:', error);
   }
 }
 

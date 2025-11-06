@@ -39,6 +39,8 @@ import {
   BarChart3,
   User,
   Code,
+  PhoneCall,
+  MessageCircle,
 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { useTheme } from "next-themes";
@@ -280,6 +282,29 @@ export default function Dashboard() {
             channelType={channelType}
             dismissible={true}
           />
+        </motion.div>
+      )}
+
+      {/* Phone Provisioning Alert (Phone/Both users need Twilio number) */}
+      {(channelType === 'phone' || channelType === 'both') && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Alert className="border-primary/30 bg-primary/5">
+            <PhoneCall className="h-4 w-4 text-primary" />
+            <AlertDescription className="font-medium">
+              <span className="text-primary font-semibold">Action Required:</span> Your account needs a phone number to start receiving calls.{' '}
+              <Button
+                variant="link"
+                className="text-primary font-medium p-0 ml-1 h-auto underline"
+                onClick={() => navigate('./contact')}
+              >
+                Request phone number →
+              </Button>
+            </AlertDescription>
+          </Alert>
         </motion.div>
       )}
 

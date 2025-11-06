@@ -16,6 +16,7 @@ import {
   MessageSquare,
   Users,
   Calendar,
+  Headset,
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -92,6 +93,7 @@ export function AppSidebar() {
       { title: "Leads", url: `${basePath}/leads`, icon: Users },
       { title: "Integrations", url: `${basePath}/integrations`, icon: Plug },
       { title: "Billing", url: `${basePath}/billing`, icon: CreditCard },
+      { title: "Support", url: `${basePath}/contact`, icon: Headset },
     ] : [])
   ];
 

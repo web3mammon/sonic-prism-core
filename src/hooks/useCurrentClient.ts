@@ -46,6 +46,7 @@ export function useCurrentClient(): CurrentClientData {
             id: clientData.client_id || '',
             user_id: clientData.user_id,
             client_id: clientData.client_id,
+            client_slug: clientData.client_slug,
             region: clientData.region || region,
             industry: clientData.industry || industry,
             business_name: clientData.business_name,

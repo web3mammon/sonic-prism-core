@@ -4,6 +4,7 @@ export interface VoiceAIClient {
   id: string;
   user_id: string;
   client_id: string;
+  client_slug?: string;
   region: string;
   industry: string;
   business_name: string;

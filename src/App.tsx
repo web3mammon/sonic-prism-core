@@ -31,6 +31,7 @@ import Billing from "./pages/Billing";
 // import BillingPayment from "./pages/BillingPayment"; // Removed: Payment now handled directly on /billing page
 import Leads from "./pages/Leads";
 import Calendar from "./pages/Calendar";
+import ContactUs from "./pages/ContactUs";
 import Auth from "./pages/Auth";
 import Login from "./pages/Login";
 import BusinessSetup from "./pages/BusinessSetup";
@@ -105,6 +106,7 @@ const App = () => (
                           {/* <Route path="/billing/payment" element={<BillingPayment />} /> */}
                           <Route path="/calendar" element={<Calendar />} />
                           <Route path="/leads" element={<Leads />} />
+                          <Route path="/contact" element={<ContactUs />} />
                           <Route path="/testing" element={<Testing />} />
                           <Route path="/call-data" element={<CallData />} />
                           <Route path="/chat-data" element={<ChatData />} />

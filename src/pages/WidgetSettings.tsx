@@ -17,7 +17,8 @@ import {
   Palette,
   Layout,
   MessageSquare,
-  Globe
+  Globe,
+  Check
 } from "lucide-react";
 import {
   Select,
@@ -27,6 +28,70 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+// Theme definitions with beautiful gradient combinations
+const THEMES = [
+  {
+    id: 'gradient-purple',
+    name: 'Purple Sunset',
+    gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    description: 'Professional purple gradient - elegant and modern'
+  },
+  {
+    id: 'gradient-ocean',
+    name: 'Ocean Breeze',
+    gradient: 'linear-gradient(135deg, #11998e 0%, #38ef7d 100%)',
+    description: 'Fresh teal to green - calm and trustworthy'
+  },
+  {
+    id: 'gradient-sunset',
+    name: 'Fire Sunset',
+    gradient: 'linear-gradient(135deg, #f12711 0%, #f5af19 100%)',
+    description: 'Bold red to orange - energetic and eye-catching'
+  },
+  {
+    id: 'gradient-forest',
+    name: 'Deep Forest',
+    gradient: 'linear-gradient(135deg, #134e5e 0%, #71b280 100%)',
+    description: 'Dark teal to sage green - natural and sophisticated'
+  },
+  {
+    id: 'gradient-midnight',
+    name: 'Midnight Sky',
+    gradient: 'linear-gradient(135deg, #2c3e50 0%, #4ca1af 100%)',
+    description: 'Professional dark blue - corporate and trustworthy'
+  },
+  {
+    id: 'gradient-rose',
+    name: 'Rose Garden',
+    gradient: 'linear-gradient(135deg, #f857a6 0%, #ff5858 100%)',
+    description: 'Vibrant pink to red - playful and friendly'
+  },
+  {
+    id: 'gradient-sky',
+    name: 'Clear Sky',
+    gradient: 'linear-gradient(135deg, #2980b9 0%, #6dd5fa 100%)',
+    description: 'Classic blue gradient - reliable and clean'
+  },
+  {
+    id: 'gradient-emerald',
+    name: 'Emerald Dream',
+    gradient: 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)',
+    description: 'Fresh green gradient - natural and eco-friendly'
+  },
+  {
+    id: 'gradient-crimson',
+    name: 'Crimson Power',
+    gradient: 'linear-gradient(135deg, #eb3349 0%, #f45c43 100%)',
+    description: 'Rich red gradient - bold and confident'
+  },
+  {
+    id: 'gradient-gold',
+    name: 'Golden Hour',
+    gradient: 'linear-gradient(135deg, #f7971e 0%, #ffd200 100%)',
+    description: 'Warm gold gradient - premium and luxurious'
+  }
+];
+
 export default function WidgetSettings() {
   const { client } = useCurrentClient();
   const [loading, setLoading] = useState(true);
@@ -35,9 +100,7 @@ export default function WidgetSettings() {
 
   // Form state
   const [config, setConfig] = useState({
-    primary_color: '#ef4444',
-    secondary_color: '#1a1a1a',
-    text_color: '#ffffff',
+    theme_name: 'gradient-purple',
     position: 'bottom-right',
     widget_size: 'medium',
     embed_code: ''
@@ -64,17 +127,16 @@ export default function WidgetSettings() {
         }
 
         if (data) {
+          const themeName = data.theme_name || 'gradient-purple';
           setConfig({
-            primary_color: data.primary_color || '#ef4444',
-            secondary_color: data.secondary_color || '#1a1a1a',
-            text_color: data.text_color || '#ffffff',
+            theme_name: themeName,
             position: data.position || 'bottom-right',
             widget_size: data.widget_size || 'medium',
-            embed_code: data.embed_code || generateEmbedCode(client.client_id)
+            embed_code: data.embed_code || generateEmbedCode(client.client_id, themeName)
           });
         } else {
           // No config found, use defaults and generate embed code
-          const embedCode = generateEmbedCode(client.client_id);
+          const embedCode = generateEmbedCode(client.client_id, 'gradient-purple');
           setConfig(prev => ({ ...prev, embed_code: embedCode }));
         }
       } catch (error) {
@@ -88,19 +150,11 @@ export default function WidgetSettings() {
     loadWidgetConfig();
   }, [client?.client_id]);
 
-  const generateEmbedCode = (clientId: string) => {
+  const generateEmbedCode = (clientId: string, themeName: string) => {
     // Use CDN for better performance and branding
-    const widgetUrl = `https://cdn.klariqo.com/widgets/klariqo-widget.js`;
+    const widgetUrl = `https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}&theme=${themeName}`;
 
     return `<!-- Klariqo Voice AI Widget -->
-<script>
-  window.klariqoConfig = {
-    clientId: '${clientId}',
-    primaryColor: '${config.primary_color}',
-    position: '${config.position}',
-    size: '${config.widget_size}'
-  };
-</script>
 <script src="${widgetUrl}" defer></script>`;
   };
 
@@ -112,17 +166,21 @@ export default function WidgetSettings() {
 
     setSaving(true);
     try {
+      // Regenerate embed code with current settings including theme
+      const updatedEmbedCode = generateEmbedCode(client.client_id, config.theme_name);
+
+      // Update state with new embed code
+      setConfig(prev => ({ ...prev, embed_code: updatedEmbedCode }));
+
       // Update or insert widget config
       const { error } = await supabase
         .from('widget_config')
         .upsert({
           client_id: client.client_id,
-          primary_color: config.primary_color,
-          secondary_color: config.secondary_color,
-          text_color: config.text_color,
+          theme_name: config.theme_name,
           position: config.position,
           widget_size: config.widget_size,
-          embed_code: config.embed_code,
+          embed_code: updatedEmbedCode,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'client_id'
@@ -146,10 +204,6 @@ export default function WidgetSettings() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleColorChange = (field: string, value: string) => {
-    setConfig(prev => ({ ...prev, [field]: value }));
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -157,6 +211,8 @@ export default function WidgetSettings() {
       </div>
     );
   }
+
+  const selectedTheme = THEMES.find(t => t.id === config.theme_name) || THEMES[0];
 
   return (
     <div className="space-y-8 p-6 font-manrope relative">
@@ -186,75 +242,68 @@ export default function WidgetSettings() {
           transition={{ duration: 0.4, delay: 0.1 }}
           className="space-y-6"
         >
-          {/* Appearance Settings */}
+          {/* Theme Picker */}
           <div className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6">
             <div className="space-y-2">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Palette className="h-5 w-5 text-primary" />
                 </div>
-                <h2 className="text-2xl font-extralight">Appearance</h2>
+                <h2 className="text-2xl font-extralight">Theme</h2>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Choose from our professionally designed gradient themes
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {THEMES.map((theme) => (
+                <motion.button
+                  key={theme.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => setConfig(prev => ({ ...prev, theme_name: theme.id }))}
+                  className={`relative rounded-xl p-4 border-2 transition-all ${
+                    config.theme_name === theme.id
+                      ? 'border-primary shadow-lg'
+                      : 'border-black/[0.08] dark:border-white/8 hover:border-black/[0.15] dark:hover:border-white/15'
+                  }`}
+                >
+                  {/* Gradient Preview */}
+                  <div
+                    className="w-full h-16 rounded-lg mb-3 shadow-md"
+                    style={{ background: theme.gradient }}
+                  />
+
+                  {/* Theme Name */}
+                  <div className="text-left">
+                    <div className="font-medium text-sm flex items-center justify-between">
+                      {theme.name}
+                      {config.theme_name === theme.id && (
+                        <Check className="h-4 w-4 text-primary" />
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                      {theme.description}
+                    </div>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </div>
+
+          {/* Position & Size Settings */}
+          <div className="rounded-2xl border border-black/[0.08] dark:border-white/8 bg-black/[0.02] dark:bg-white/[0.02] p-6 space-y-6">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Layout className="h-5 w-5 text-primary" />
+                </div>
+                <h2 className="text-2xl font-extralight">Layout</h2>
               </div>
             </div>
 
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="primary_color">Primary Color</Label>
-                <div className="flex gap-3">
-                  <Input
-                    id="primary_color"
-                    type="color"
-                    value={config.primary_color}
-                    onChange={(e) => handleColorChange('primary_color', e.target.value)}
-                    className="w-20 h-10"
-                  />
-                  <Input
-                    value={config.primary_color}
-                    onChange={(e) => handleColorChange('primary_color', e.target.value)}
-                    placeholder="#ef4444"
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="secondary_color">Secondary Color</Label>
-                <div className="flex gap-3">
-                  <Input
-                    id="secondary_color"
-                    type="color"
-                    value={config.secondary_color}
-                    onChange={(e) => handleColorChange('secondary_color', e.target.value)}
-                    className="w-20 h-10"
-                  />
-                  <Input
-                    value={config.secondary_color}
-                    onChange={(e) => handleColorChange('secondary_color', e.target.value)}
-                    placeholder="#1a1a1a"
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="text_color">Text Color</Label>
-                <div className="flex gap-3">
-                  <Input
-                    id="text_color"
-                    type="color"
-                    value={config.text_color}
-                    onChange={(e) => handleColorChange('text_color', e.target.value)}
-                    className="w-20 h-10"
-                  />
-                  <Input
-                    value={config.text_color}
-                    onChange={(e) => handleColorChange('text_color', e.target.value)}
-                    placeholder="#ffffff"
-                    className="flex-1"
-                  />
-                </div>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="position">Widget Position</Label>
                 <Select value={config.position} onValueChange={(value) => setConfig(prev => ({ ...prev, position: value }))}>
@@ -366,25 +415,29 @@ export default function WidgetSettings() {
                 <div className="p-2 rounded-lg bg-primary/10">
                   <Layout className="h-5 w-5 text-primary" />
                 </div>
-                <h2 className="text-2xl font-extralight">Widget Preview</h2>
+                <h2 className="text-2xl font-extralight">Current Theme</h2>
               </div>
-              <p className="text-muted-foreground text-sm">
-                Visit your website after installing the widget to see it in action with your customizations
-              </p>
             </div>
 
-            <div className="space-y-3 text-sm text-muted-foreground">
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
-                <span>Position: <strong className="text-foreground">{config.position.replace('-', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</strong></span>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
-                <span>Size: <strong className="text-foreground">{config.widget_size.charAt(0).toUpperCase() + config.widget_size.slice(1)}</strong></span>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-2 h-2 rounded-full bg-primary mt-1.5"></div>
-                <span>Primary Color: <strong className="text-foreground">{config.primary_color}</strong></span>
+            {/* Live Preview of Selected Theme */}
+            <div className="space-y-4">
+              <div
+                className="w-full h-32 rounded-xl shadow-lg"
+                style={{ background: selectedTheme.gradient }}
+              />
+              <div className="text-sm space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Theme:</span>
+                  <strong className="text-foreground">{selectedTheme.name}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Position:</span>
+                  <strong className="text-foreground">{config.position.replace('-', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</strong>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Size:</span>
+                  <strong className="text-foreground">{config.widget_size.charAt(0).toUpperCase() + config.widget_size.slice(1)}</strong>
+                </div>
               </div>
             </div>
           </div>
