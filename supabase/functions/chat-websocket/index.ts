@@ -20,9 +20,8 @@ interface VoiceSession {
   transcript: Array<{ role: string; content: string; timestamp: string }>;
   startTime: number;
   conversationHistory: Array<{ role: string; content: string }>;
-  deepgramConnection: WebSocket | null;
+  assemblyaiConnection: WebSocket | null;
   isProcessing: boolean;
-  deepgramKeepaliveTimer: number | null;
 }
 
 const sessions = new Map<string, VoiceSession>();
@@ -81,18 +80,17 @@ serve(async (req) => {
       transcript: [],
       startTime: Date.now(),
       conversationHistory: [],
-      deepgramConnection: null,
+      assemblyaiConnection: null,
       isProcessing: false,
-      deepgramKeepaliveTimer: null,
     };
 
     sessions.set(sessionId, session);
 
-    // Initialize Deepgram connection FIRST (critical path)
-    const deepgramReady = await initializeDeepgram(sessionId, socket);
+    // Initialize AssemblyAI connection FIRST (critical path)
+    const assemblyaiReady = await initializeAssemblyAI(sessionId, socket);
 
-    if (!deepgramReady) {
-      console.error('[WebSocket] Failed to initialize Deepgram');
+    if (!assemblyaiReady) {
+      console.error('[WebSocket] Failed to initialize AssemblyAI');
       socket.send(JSON.stringify({
         type: 'error',
         message: 'Failed to initialize voice recognition'
@@ -184,7 +182,7 @@ serve(async (req) => {
 
         case 'start_recording':
           console.log('[WebSocket] Recording started');
-          // Deepgram already initialized, no action needed
+          // AssemblyAI already initialized, no action needed
           break;
 
         case 'stop_recording':
@@ -215,12 +213,6 @@ serve(async (req) => {
 
     const session = sessions.get(sessionId);
 
-    // Clear keepalive timers
-    if (session?.deepgramKeepaliveTimer) {
-      clearInterval(session.deepgramKeepaliveTimer);
-      console.log('[Deepgram] Keepalive timer cleared');
-    }
-
     await saveSessionToDatabase(sessionId);
 
     // Fire-and-forget cleanup operations (non-blocking)
@@ -242,8 +234,8 @@ serve(async (req) => {
       );
     }
 
-    if (session?.deepgramConnection) {
-      session.deepgramConnection.close();
+    if (session?.assemblyaiConnection) {
+      session.assemblyaiConnection.close();
     }
     sessions.delete(sessionId);
   };
@@ -255,82 +247,73 @@ serve(async (req) => {
   return response;
 });
 
-async function initializeDeepgram(sessionId: string, clientSocket: WebSocket): Promise<boolean> {
+async function initializeAssemblyAI(sessionId: string, clientSocket: WebSocket): Promise<boolean> {
   const session = sessions.get(sessionId);
   if (!session) return false;
 
-  const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
-  if (!DEEPGRAM_API_KEY) {
-    console.error('[Deepgram] API key not configured');
+  const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
+  if (!ASSEMBLYAI_API_KEY) {
+    console.error('[AssemblyAI] API key not configured');
     return false;
   }
 
   try {
-    const deepgramWs = new WebSocket(
-      'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
-        encoding: 'linear16',
-        sample_rate: '24000',
-        channels: '1',
-        interim_results: 'true',
-        punctuate: 'true',
-        endpointing: '300',
-      }),
-      ['token', DEEPGRAM_API_KEY]
+    const params = new URLSearchParams({
+      sample_rate: '24000', // Web widget uses 24kHz PCM
+      format_turns: 'true',
+      end_of_turn_confidence_threshold: '0.7',
+      min_end_of_turn_silence_when_confident: '160',
+      max_turn_silence: '1000',
+      inactivity_timeout: '120', // 2 minutes of inactivity before session closes
+      token: ASSEMBLYAI_API_KEY
+    });
+
+    const assemblyaiWs = new WebSocket(
+      `wss://streaming.assemblyai.com/v3/ws?${params}`
     );
 
     const connectionPromise = new Promise<boolean>((resolve) => {
       const timeout = setTimeout(() => {
-        console.error('[Deepgram] Connection timeout');
+        console.error('[AssemblyAI] Connection timeout');
         resolve(false);
       }, 10000);
 
-      deepgramWs.onopen = () => {
+      assemblyaiWs.onopen = () => {
         clearTimeout(timeout);
-        console.log('[Deepgram] Connected');
-        session.deepgramConnection = deepgramWs;
-
-        // Start keepalive to prevent Deepgram timeout (send every 5 seconds)
-        session.deepgramKeepaliveTimer = setInterval(() => {
-          if (deepgramWs.readyState === WebSocket.OPEN) {
-            try {
-              deepgramWs.send(JSON.stringify({ type: 'KeepAlive' }));
-              console.log('[Deepgram] Keepalive sent');
-            } catch (error) {
-              console.error('[Deepgram] Keepalive error:', error);
-            }
-          }
-        }, 5000); // Every 5 seconds
-
+        console.log('[AssemblyAI] Connected');
+        session.assemblyaiConnection = assemblyaiWs;
         resolve(true);
       };
 
-      deepgramWs.onerror = (error) => {
+      assemblyaiWs.onerror = (error) => {
         clearTimeout(timeout);
-        console.error('[Deepgram] Connection error:', error);
+        console.error('[AssemblyAI] Connection error:', error);
         resolve(false);
       };
     });
 
-    deepgramWs.onmessage = async (event) => {
+    assemblyaiWs.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
+        const msgType = data.type;
 
-        if (data.type === 'Results') {
-          const transcript = data.channel?.alternatives?.[0]?.transcript;
-          const isFinal = data.is_final;
+        if (msgType === 'Begin') {
+          console.log(`[AssemblyAI] Session began: ID=${data.id}`);
+        } else if (msgType === 'Turn') {
+          const transcript = data.transcript || '';
+          const isFormatted = data.turn_is_formatted;
 
           if (transcript && transcript.trim()) {
-            console.log(`[Deepgram] ${isFinal ? 'Final' : 'Interim'}: ${transcript}`);
+            console.log(`[AssemblyAI] ${isFormatted ? 'Formatted' : 'Partial'}: ${transcript}`);
 
-            // Only send final transcripts to widget (interim not needed for chat display)
-            if (isFinal) {
-              clientSocket.send(JSON.stringify({
-                type: 'transcript.user',
-                text: transcript
-              }));
-            }
+            // Send all transcripts to widget (both partial and formatted for live display)
+            clientSocket.send(JSON.stringify({
+              type: 'transcript.user',
+              text: transcript,
+              isFinal: isFormatted
+            }));
 
-            if (isFinal && !session.isProcessing) {
+            if (isFormatted && !session.isProcessing) {
               session.isProcessing = true;
 
               session.transcript.push({
@@ -342,32 +325,34 @@ async function initializeDeepgram(sessionId: string, clientSocket: WebSocket): P
               await processWithGPT(sessionId, transcript, clientSocket);
             }
           }
+        } else if (msgType === 'Termination') {
+          console.log(`[AssemblyAI] Session terminated: Audio=${data.audio_duration_seconds}s`);
         }
       } catch (error) {
-        console.error('[Deepgram] Message parsing error:', error);
+        console.error('[AssemblyAI] Message parsing error:', error);
       }
     };
 
-    deepgramWs.onclose = () => {
-      console.log('[Deepgram] Connection closed');
+    assemblyaiWs.onclose = (event) => {
+      console.log(`[AssemblyAI] Connection closed: code=${event.code}`);
     };
 
     return await connectionPromise;
   } catch (error) {
-    console.error('[Deepgram] Connection error:', error);
+    console.error('[AssemblyAI] Connection error:', error);
     return false;
   }
 }
 
 async function handleAudioChunk(sessionId: string, audioBase64: string, socket: WebSocket) {
   const session = sessions.get(sessionId);
-  if (!session || !session.deepgramConnection) return;
+  if (!session || !session.assemblyaiConnection) return;
 
   try {
     const audioData = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
 
-    if (session.deepgramConnection.readyState === WebSocket.OPEN) {
-      session.deepgramConnection.send(audioData);
+    if (session.assemblyaiConnection.readyState === WebSocket.OPEN) {
+      session.assemblyaiConnection.send(audioData);
     }
   } catch (error) {
     console.error('[Audio] Error processing chunk:', error);
@@ -684,8 +669,8 @@ async function handleEndSession(sessionId: string, socket: WebSocket) {
   console.log('[Session] Ending:', sessionId);
 
   const session = sessions.get(sessionId);
-  if (session?.deepgramConnection) {
-    session.deepgramConnection.close();
+  if (session?.assemblyaiConnection) {
+    session.assemblyaiConnection.close();
   }
 
   socket.send(JSON.stringify({
