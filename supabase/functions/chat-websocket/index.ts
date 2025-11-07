@@ -190,6 +190,10 @@ serve(async (req) => {
           // Audio continues to be processed as chunks arrive
           break;
 
+        case 'interrupt':
+          await handleInterrupt(sessionId, socket);
+          break;
+
         // Session end (both formats)
         case 'session.end':
         case 'end_session':
@@ -663,6 +667,24 @@ async function playIntroAudio(sessionId: string, socket: WebSocket, supabaseClie
   } catch (error) {
     console.error('[IntroAudio] Error:', error);
   }
+}
+
+async function handleInterrupt(sessionId: string, socket: WebSocket) {
+  console.log('[Interrupt] User interrupted AI response');
+
+  const session = sessions.get(sessionId);
+  if (!session) return;
+
+  // Reset processing flag to cancel any pending TTS generation
+  session.isProcessing = false;
+
+  // Notify frontend that interrupt was processed
+  socket.send(JSON.stringify({
+    type: 'interrupt.acknowledged',
+    message: 'Interrupt processed'
+  }));
+
+  console.log('[Interrupt] AI interrupted, ready for new input');
 }
 
 async function handleEndSession(sessionId: string, socket: WebSocket) {
