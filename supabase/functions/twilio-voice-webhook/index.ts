@@ -20,7 +20,7 @@ interface TwilioVoiceSession {
   supabase: any;
   conversationHistory: Array<{ role: string; content: string }>;
   conversationLog: Array<{ speaker: string; content: string; timestamp: string; message_type: string }>;
-  deepgramConnection: WebSocket | null;
+  assemblyaiConnection: WebSocket | null;
   isProcessing: boolean;
   sessionStartTime: number;
   // Session management (from FastAPI session.py)
@@ -34,8 +34,7 @@ interface TwilioVoiceSession {
   audioChunkBuffer: { [index: number]: Uint8Array };
   nextChunkToSend: number;
   currentSocket: WebSocket | null;
-  // Keepalive timers
-  deepgramKeepaliveTimer: number | null;
+  // Keepalive timer for Supabase
   supabaseKeepaliveTimer: number | null;
 }
 
@@ -131,74 +130,63 @@ Deno.serve(async (req) => {
   return response;
 });
 
-async function initializeDeepgram(callSid: string, twilioSocket: WebSocket): Promise<boolean> {
+async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): Promise<boolean> {
   const session = sessions.get(callSid);
   if (!session) return false;
 
-  const DEEPGRAM_API_KEY = Deno.env.get('DEEPGRAM_API_KEY');
-  if (!DEEPGRAM_API_KEY) {
-    console.error('[Deepgram] API key not configured');
+  const ASSEMBLYAI_API_KEY = Deno.env.get('ASSEMBLYAI_API_KEY');
+  if (!ASSEMBLYAI_API_KEY) {
+    console.error('[AssemblyAI] API key not configured');
     return false;
   }
 
   try {
-    // For Twilio: μ-law, 8kHz (NOT linear16/24kHz like web widget)
-    const deepgramWs = new WebSocket(
-      'wss://api.deepgram.com/v1/listen?' + new URLSearchParams({
-        encoding: 'mulaw',           // Twilio uses μ-law
-        sample_rate: '8000',          // Twilio uses 8kHz
-        channels: '1',
-        interim_results: 'true',
-        punctuate: 'true',
-        endpointing: '300',           // ⚡ FASTER: 300ms like nlc-demo (was 400ms)
-        vad_events: 'true',            // Voice activity detection for faster responses
-      }),
-      ['token', DEEPGRAM_API_KEY]
+    // For Twilio: μ-law (pcm_mulaw), 8kHz - AssemblyAI supports this!
+    const params = new URLSearchParams({
+      sample_rate: '8000',             // Twilio uses 8kHz
+      encoding: 'pcm_mulaw',           // Twilio uses μ-law format
+      format_turns: 'true',            // Enable turn detection for natural conversation
+      end_of_turn_confidence_threshold: '0.7',
+      min_end_of_turn_silence_when_confident: '160',  // 160ms like nlc-demo
+      max_turn_silence: '1000',        // 1 second max silence
+      inactivity_timeout: '120',       // 2 minutes inactivity timeout
+      token: ASSEMBLYAI_API_KEY
+    });
+
+    const assemblyaiWs = new WebSocket(
+      `wss://streaming.assemblyai.com/v3/ws?${params}`
     );
 
     const connectionPromise = new Promise<boolean>((resolve) => {
       const timeout = setTimeout(() => {
-        console.error('[Deepgram] Connection timeout');
+        console.error('[AssemblyAI] Connection timeout');
         resolve(false);
       }, 10000);
 
-      deepgramWs.onopen = () => {
+      assemblyaiWs.onopen = () => {
         clearTimeout(timeout);
-        console.log('[Deepgram] Connected (μ-law 8kHz for Twilio)');
-        session.deepgramConnection = deepgramWs;
-
-        // Start keepalive to prevent Deepgram timeout (send every 5 seconds)
-        session.deepgramKeepaliveTimer = setInterval(() => {
-          if (deepgramWs.readyState === WebSocket.OPEN) {
-            try {
-              deepgramWs.send(JSON.stringify({ type: 'KeepAlive' }));
-              console.log('[Deepgram] Keepalive sent');
-            } catch (error) {
-              console.error('[Deepgram] Keepalive error:', error);
-            }
-          }
-        }, 5000); // Every 5 seconds
-
+        console.log('[AssemblyAI] Connected (μ-law 8kHz for Twilio)');
+        session.assemblyaiConnection = assemblyaiWs;
         resolve(true);
       };
 
-      deepgramWs.onerror = (error) => {
+      assemblyaiWs.onerror = (error) => {
         clearTimeout(timeout);
-        console.error('[Deepgram] Connection error:', error);
+        console.error('[AssemblyAI] Connection error:', error);
         resolve(false);
       };
     });
 
-    deepgramWs.onmessage = async (event) => {
+    assemblyaiWs.onmessage = async (event) => {
       try {
         const data = JSON.parse(event.data);
 
-        if (data.type === 'Results') {
-          const transcript = data.channel?.alternatives?.[0]?.transcript;
-          const isFinal = data.is_final;
+        // Handle formatted turns (final transcripts with turn detection)
+        if (data.message_type === 'turn_formatted') {
+          const transcript = data.text?.trim();
 
-          if (transcript && transcript.trim() && isFinal && !session.isProcessing) {
-            console.log(`[Deepgram] Final transcript: ${transcript}`);
+          if (transcript && !session.isProcessing) {
+            console.log(`[AssemblyAI] Final transcript: ${transcript}`);
 
             session.isProcessing = true;
 
@@ -212,19 +200,35 @@ async function initializeDeepgram(callSid: string, twilioSocket: WebSocket): Pro
             // Process with GPT streaming
             await processWithGPTStreaming(callSid, transcript, twilioSocket);
           }
+        } else if (data.message_type === 'partial_transcript') {
+          // Partial transcript - interrupt detection
+          const partialText = data.text?.trim();
+          if (partialText) {
+            console.log(`[AssemblyAI] Partial: ${partialText}`);
+
+            // Interrupt AI if it's currently speaking/processing
+            if (session.isProcessing) {
+              console.log('[Interrupt] User interrupted AI - stopping current response');
+              session.isProcessing = false;
+              // Note: For Twilio, we can't stop audio already sent to phone
+              // But we stop generating/sending new chunks
+            }
+          }
+        } else if (data.message_type === 'session_created') {
+          console.log(`[AssemblyAI] Session created:`, data.session_id);
         }
       } catch (error) {
-        console.error('[Deepgram] Message parsing error:', error);
+        console.error('[AssemblyAI] Message parsing error:', error);
       }
     };
 
-    deepgramWs.onclose = () => {
-      console.log('[Deepgram] Connection closed');
+    assemblyaiWs.onclose = () => {
+      console.log('[AssemblyAI] Connection closed');
     };
 
     return await connectionPromise;
   } catch (error) {
-    console.error('[Deepgram] Connection error:', error);
+    console.error('[AssemblyAI] Connection error:', error);
     return false;
   }
 }
@@ -406,7 +410,7 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         supabase: supabaseClient,
         conversationHistory: [],
         conversationLog: [],
-        deepgramConnection: null,
+        assemblyaiConnection: null,
         isProcessing: false,
         sessionStartTime: Date.now(),
         sessionMemory: {
@@ -419,18 +423,17 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         audioChunkBuffer: {},
         nextChunkToSend: 0,
         currentSocket: socket,
-        // Keepalive timers
-        deepgramKeepaliveTimer: null,
+        // Keepalive timer for Supabase
         supabaseKeepaliveTimer: null,
       };
 
       sessions.set(callSid, newSession);
       console.log('[Twilio] ✅ In-memory session created');
 
-      // Initialize Deepgram
-      const deepgramReady = await initializeDeepgram(callSid, socket);
-      if (!deepgramReady) {
-        console.error('[Twilio] Failed to initialize Deepgram');
+      // Initialize AssemblyAI
+      const assemblyaiReady = await initializeAssemblyAI(callSid, socket);
+      if (!assemblyaiReady) {
+        console.error('[Twilio] Failed to initialize AssemblyAI');
         socket.close();
         return;
       }
@@ -461,15 +464,15 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
 
 async function handleTwilioAudio(callSid: string, audioPayloadBase64: string) {
   const session = sessions.get(callSid);
-  if (!session || !session.deepgramConnection) return;
+  if (!session || !session.assemblyaiConnection) return;
 
   try {
     // Decode μ-law audio from Twilio
     const audioData = Uint8Array.from(atob(audioPayloadBase64), c => c.charCodeAt(0));
 
-    // Forward to Deepgram
-    if (session.deepgramConnection.readyState === WebSocket.OPEN) {
-      session.deepgramConnection.send(audioData);
+    // Forward to AssemblyAI (already in μ-law format that AssemblyAI supports)
+    if (session.assemblyaiConnection.readyState === WebSocket.OPEN) {
+      session.assemblyaiConnection.send(audioData);
     }
   } catch (error) {
     console.error('[Twilio] Error processing audio:', error);
@@ -961,6 +964,15 @@ function sendBufferedAudioChunks(callSid: string) {
   const session = sessions.get(callSid);
   if (!session || !session.currentSocket) return;
 
+  // Check if interrupted - don't send buffered chunks
+  if (!session.isProcessing) {
+    console.log('[AudioQueue] Skipping buffered chunks - interrupted');
+    // Clear buffer on interrupt
+    session.audioChunkBuffer = {};
+    session.nextChunkToSend = 0;
+    return;
+  }
+
   // Send all sequential chunks that are buffered (like nlc-demo's playBufferedChunks)
   while (session.audioChunkBuffer[session.nextChunkToSend] !== undefined) {
     const audioBytes = session.audioChunkBuffer[session.nextChunkToSend];
@@ -999,6 +1011,12 @@ function sendBufferedAudioChunks(callSid: string) {
 async function generateAndStreamTTS(callSid: string, text: string, socket: WebSocket, chunkIndex: number) {
   const session = sessions.get(callSid);
   if (!session) return;
+
+  // Check if interrupted before generating TTS
+  if (!session.isProcessing) {
+    console.log(`[ElevenLabs #${chunkIndex}] Skipping TTS - interrupted`);
+    return;
+  }
 
   const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
   if (!ELEVENLABS_API_KEY) {
@@ -1165,11 +1183,7 @@ async function finalizeCallSession(callSid: string) {
   const session = sessions.get(callSid);
   if (!session) return;
 
-  // Clear keepalive timers
-  if (session.deepgramKeepaliveTimer) {
-    clearInterval(session.deepgramKeepaliveTimer);
-    console.log('[Deepgram] Keepalive timer cleared');
-  }
+  // Clear keepalive timer (AssemblyAI doesn't need keepalive, but Supabase might)
   if (session.supabaseKeepaliveTimer) {
     clearInterval(session.supabaseKeepaliveTimer);
     console.log('[Supabase] Keepalive timer cleared');
@@ -1234,8 +1248,8 @@ async function cleanupSession(callSid: string) {
   const session = sessions.get(callSid);
   if (!session) return;
 
-  if (session.deepgramConnection) {
-    session.deepgramConnection.close();
+  if (session.assemblyaiConnection) {
+    session.assemblyaiConnection.close();
   }
 
   await finalizeCallSession(callSid);
