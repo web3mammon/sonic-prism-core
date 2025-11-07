@@ -292,10 +292,12 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
 
         // Determine rejection message based on reason
         let rejectionMessage = "Thank you for calling. ";
-        if (accessCheck.reason === 'trial_expired_time') {
+        if (accessCheck.reason === 'trial_minutes_exhausted') {
+          rejectionMessage += "You have reached your trial limit. Please upgrade your account to continue.";
+        } else if (accessCheck.reason === 'trial_expired_time') {
           rejectionMessage += "Your 3-day free trial has expired. Please visit your dashboard to upgrade your plan and continue using our service.";
         } else if (accessCheck.reason === 'trial_expired_credits') {
-          rejectionMessage += "You have used all 10 free trial calls. Please visit your dashboard to upgrade your plan and continue making calls.";
+          rejectionMessage += "You have used all your free trial minutes. Please visit your dashboard to upgrade your plan and continue making calls.";
         } else {
           rejectionMessage += "Your account has run out of credits. Please visit your dashboard to add more credits or upgrade your plan.";
         }
@@ -1210,6 +1212,11 @@ async function finalizeCallSession(callSid: string) {
   // Extract and save lead information from conversation
   if (session && session.conversationLog.length > 0) {
     await extractAndSaveLead(session);
+
+    // Process calendar booking if conversation contains booking intent
+    await processCalendarBooking(session, callSid).catch(err =>
+      console.error('[Booking] Background booking error:', err)
+    );
   }
 
   // ========================================
@@ -1257,6 +1264,18 @@ async function extractAndSaveLead(session: any) {
       .map((msg: any) => `${msg.speaker === 'user' ? 'Customer' : 'AI'}: ${msg.content}`)
       .join('\n');
 
+    // Validate transcript is not empty
+    if (!transcript || transcript.trim().length === 0) {
+      console.log('[Lead Capture] Empty transcript, skipping');
+      return;
+    }
+
+    // Truncate if too long (Groq has token limits)
+    const maxLength = 8000; // ~2000 tokens
+    const truncatedTranscript = transcript.length > maxLength
+      ? transcript.substring(0, maxLength) + '...[truncated]'
+      : transcript;
+
     console.log('[Lead Capture] Analyzing conversation for lead information...');
 
     // Use LLM to extract lead information
@@ -1267,7 +1286,7 @@ async function extractAndSaveLead(session: any) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',
+        model: 'openai/gpt-oss-20b',
         messages: [
           {
             role: 'system',
@@ -1289,16 +1308,18 @@ Examples:
           },
           {
             role: 'user',
-            content: `Extract lead information from this conversation:\n\n${transcript}`
+            content: `Extract lead information from this conversation:\n\n${truncatedTranscript}`
           }
         ],
         temperature: 0.1,
         max_tokens: 200
-      })
+      }),
+      signal: AbortSignal.timeout(30000)
     });
 
     if (!response.ok) {
-      console.error('[Lead Capture] Groq API error:', response.status);
+      const errorBody = await response.text();
+      console.error('[Lead Capture] Groq API error:', response.status, errorBody);
       return;
     }
 
@@ -1356,11 +1377,172 @@ Examples:
 }
 
 // ============================================================================
+// CALENDAR BOOKING FUNCTIONS (Non-blocking - processed at end of call)
+// ============================================================================
+
+/**
+ * Process calendar booking intent from conversation (runs in background at end of call)
+ * Uses separate LLM call to extract booking details, then creates appointment
+ */
+async function processCalendarBooking(session: any, callSid: string): Promise<void> {
+  const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
+  if (!GROQ_API_KEY) {
+    console.log('[Booking] Groq API key not found, skipping booking check');
+    return;
+  }
+
+  try {
+    // Build conversation transcript for analysis
+    const transcript = session.conversationLog
+      .map((msg: any) => `${msg.speaker === 'user' ? 'Customer' : 'AI'}: ${msg.content}`)
+      .join('\n');
+
+    // Validate transcript is not empty
+    if (!transcript || transcript.trim().length === 0) {
+      console.log('[Booking] Empty transcript, skipping');
+      return;
+    }
+
+    // Truncate if too long
+    const maxLength = 8000;
+    const truncatedTranscript = transcript.length > maxLength
+      ? transcript.substring(0, maxLength) + '...[truncated]'
+      : transcript;
+
+    console.log('[Booking] Analyzing conversation for booking intent...');
+
+    // Use LLM to check if conversation contains booking request
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'openai/gpt-oss-20b',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a booking extraction assistant. Analyze the phone conversation and determine if the customer wants to book an appointment.
+
+If YES, extract the booking details and return a JSON object:
+{
+  "has_booking": true,
+  "customer_name": "name if mentioned",
+  "customer_email": "email if mentioned",
+  "customer_phone": "phone number if mentioned (or caller's number)",
+  "date": "YYYY-MM-DD format if date mentioned",
+  "start_time": "HH:MM format (24-hour) if time mentioned",
+  "end_time": "HH:MM format (24-hour), estimate 1 hour duration if not specified",
+  "service": "type of service/appointment requested",
+  "notes": "any additional notes or requirements mentioned"
+}
+
+If NO booking intent, return: {"has_booking": false}
+
+Examples:
+- "I'd like to book a haircut for tomorrow at 3pm" → has_booking: true
+- "What are your hours?" → has_booking: false
+- "Can I schedule a consultation?" → has_booking: true (even without date/time - we'll follow up)`
+          },
+          {
+            role: 'user',
+            content: `Analyze this conversation for booking intent:\n\n${truncatedTranscript}`
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 300
+      }),
+      signal: AbortSignal.timeout(30000)
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('[Booking] Groq API error:', response.status, errorBody);
+      return;
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content?.trim();
+
+    if (!content) {
+      console.log('[Booking] No content returned from LLM');
+      return;
+    }
+
+    // Parse JSON response
+    let bookingData;
+    try {
+      bookingData = JSON.parse(content);
+    } catch (e) {
+      console.error('[Booking] Failed to parse LLM response:', content);
+      return;
+    }
+
+    // Check if there's a booking intent
+    if (!bookingData.has_booking) {
+      console.log('[Booking] No booking intent detected in conversation');
+      return;
+    }
+
+    console.log('[Booking] ✅ Booking intent detected:', bookingData);
+
+    // Validate we have minimum required info (at least customer name or contact info)
+    if (!bookingData.customer_name && !bookingData.customer_email && !bookingData.customer_phone) {
+      console.log('[Booking] ⚠️ Booking intent detected but no customer contact info - saving as pending lead');
+      // This will be captured by extractAndSaveLead function
+      return;
+    }
+
+    // Use caller's phone if we have a name but no explicit phone
+    if (!bookingData.customer_phone && session.callerNumber) {
+      bookingData.customer_phone = session.callerNumber;
+    }
+
+    // Create the appointment via calendar-integration function
+    const bookingPayload = {
+      action: 'create_booking',
+      client_id: session.client.client_id,
+      customer_name: bookingData.customer_name || 'Unknown',
+      customer_phone: bookingData.customer_phone || null,
+      customer_email: bookingData.customer_email || null,
+      start_time: bookingData.date && bookingData.start_time
+        ? `${bookingData.date}T${bookingData.start_time}:00`
+        : null,
+      end_time: bookingData.date && bookingData.end_time
+        ? `${bookingData.date}T${bookingData.end_time}:00`
+        : null,
+      service_type: bookingData.service || 'General appointment',
+      notes: bookingData.notes || '',
+      session_id: callSid,
+      source: 'phone',
+      status: (bookingData.date && bookingData.start_time) ? 'confirmed' : 'pending'
+    };
+
+    console.log('[Booking] Creating appointment:', bookingPayload);
+
+    const { data: result, error: bookingError } = await session.supabase.functions.invoke(
+      'calendar-integration',
+      { body: bookingPayload }
+    );
+
+    if (bookingError) {
+      console.error('[Booking] ❌ Failed to create appointment:', bookingError);
+    } else {
+      console.log('[Booking] ✅ Appointment created successfully:', result);
+    }
+
+  } catch (error) {
+    console.error('[Booking] Error during booking processing:', error);
+  }
+}
+
+// ============================================================================
 // FLEXPRICE INTEGRATION FUNCTIONS
 // ============================================================================
 
 /**
- * Check user access combining trial + subscription logic
+ * Check user access combining trial + subscription logic (minute-based)
  * Returns: { allowed: boolean, reason: string }
  */
 async function checkUserAccess(client: any): Promise<{ allowed: boolean; reason: string }> {
@@ -1374,29 +1556,39 @@ async function checkUserAccess(client: any): Promise<{ allowed: boolean; reason:
       }
     }
 
-    // 2. No paid subscription → check TRIAL status (per-client credits in database)
+    // 2. No paid subscription → check TRIAL status (MINUTE-BASED)
     console.log('[Access] No active subscription - checking trial status...');
 
-    // 2a. Check credits (from voice_ai_clients.credits - per-client, not per-user)
-    const credits = client.credits || 0;
-    if (credits < 1) {
-      console.log(`[Access] Trial credits exhausted (${credits} remaining)`);
-      return { allowed: false, reason: 'trial_expired_credits' };
+    // 2a. CHECK MINUTE-BASED LIMITS (Nov 1, 2025)
+    const hasMinuteTracking = client.trial_minutes !== undefined && client.trial_minutes !== null;
+
+    if (hasMinuteTracking) {
+      if (!client.paid_plan) {
+        // Trial user - check minute limit
+        const minutesUsed = client.trial_minutes_used || 0;
+        const minutesTotal = client.trial_minutes || 30;
+
+        if (minutesUsed >= minutesTotal) {
+          console.log(`[Access] ❌ Trial minutes exhausted: ${minutesUsed}/${minutesTotal}`);
+          return { allowed: false, reason: 'trial_minutes_exhausted' };
+        }
+
+        console.log(`[Access] ✅ Trial minutes available: ${minutesTotal - minutesUsed}/${minutesTotal} remaining`);
+        return { allowed: true, reason: 'trial_minutes_active' };
+      } else {
+        // Paid user - always allow (overage tracked separately)
+        const minutesUsed = client.paid_minutes_used || 0;
+        const minutesIncluded = client.paid_minutes_included || 0;
+        const overage = Math.max(0, minutesUsed - minutesIncluded);
+
+        console.log(`[Access] ✅ Paid plan active: ${minutesUsed}/${minutesIncluded} minutes used${overage > 0 ? ` (${overage} overage)` : ''}`);
+        return { allowed: true, reason: 'paid_plan_active' };
+      }
     }
 
-    // 2b. Check trial time limit (3 days from CLIENT creation)
-    const accountAge = Date.now() - new Date(client.created_at).getTime();
-    const daysSinceSignup = accountAge / (1000 * 60 * 60 * 24);
-
-    if (daysSinceSignup > 3) {
-      console.log(`[Access] Trial time expired (${Math.floor(daysSinceSignup)} days since client creation)`);
-      return { allowed: false, reason: 'trial_expired_time' };
-    }
-
-    // 3. Trial is still valid
-    const creditsUsed = 10 - credits;
-    console.log(`[Access] Trial active: ${creditsUsed}/10 credits used, ${Math.floor(3 - daysSinceSignup)} days remaining`);
-    return { allowed: true, reason: 'trial_active' };
+    // 2b. Fallback: If no minute tracking, fail open (shouldn't happen)
+    console.warn('[Access] ⚠️ No minute tracking found - allowing call (fail open)');
+    return { allowed: true, reason: 'no_limits_configured' };
 
   } catch (error) {
     console.error('[Access] Access check error:', error);

@@ -226,28 +226,12 @@ serve(async (req) => {
     // Fire-and-forget cleanup operations (non-blocking)
     // Extract and save lead information from conversation
     if (session && session.conversationHistory.length > 0) {
-      extractAndSaveLead(session).catch(err => console.error('[Lead] Background extraction error:', err));
+      extractAndSaveLead(session, supabaseClient).catch(err => console.error('[Lead] Background extraction error:', err));
 
       // Process calendar booking if conversation contains booking intent
       processCalendarBooking(session, sessionId, supabaseClient).catch(err =>
         console.error('[Booking] Background booking error:', err)
       );
-    }
-
-    // Deduct 1 credit from client's balance (per-client credits in database)
-    if (session && session.client) {
-      supabaseClient
-        .from('voice_ai_clients')
-        .update({ credits: Math.max(0, (session.client.credits || 0) - 1) })
-        .eq('client_id', session.clientId)
-        .then(({ error }) => {
-          if (error) {
-            console.error('[Credits] Failed to deduct credit:', error);
-          } else {
-            console.log(`[Credits] Deducted 1 credit from client ${session.clientId} (${session.client.credits} → ${session.client.credits - 1})`);
-          }
-        })
-        .catch(err => console.error('[Credits] Error deducting credit:', err));
     }
 
     // Track usage event in FlexPrice (for paid plans analytics - future)
@@ -844,7 +828,7 @@ Remember: Users are LISTENING, not reading. Speak naturally and concisely.`;
 /**
  * Extract lead information from conversation and save to database
  */
-async function extractAndSaveLead(session: any) {
+async function extractAndSaveLead(session: any, supabaseClient: any) {
   const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
   if (!GROQ_API_KEY) {
     console.log('[Lead Capture] Groq API key not found, skipping lead extraction');
@@ -857,6 +841,18 @@ async function extractAndSaveLead(session: any) {
       .map((msg: any) => `${msg.role === 'user' ? 'Customer' : 'AI'}: ${msg.content}`)
       .join('\n');
 
+    // Validate transcript is not empty
+    if (!transcript || transcript.trim().length === 0) {
+      console.log('[Lead Capture] Empty transcript, skipping');
+      return;
+    }
+
+    // Truncate if too long (Groq has token limits)
+    const maxLength = 8000; // ~2000 tokens
+    const truncatedTranscript = transcript.length > maxLength
+      ? transcript.substring(0, maxLength) + '...[truncated]'
+      : transcript;
+
     console.log('[Lead Capture] Analyzing conversation for lead information...');
 
     // Use LLM to extract lead information
@@ -867,7 +863,7 @@ async function extractAndSaveLead(session: any) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',
+        model: 'openai/gpt-oss-20b',
         messages: [
           {
             role: 'system',
@@ -890,16 +886,18 @@ Examples:
           },
           {
             role: 'user',
-            content: `Extract lead information from this conversation:\n\n${transcript}`
+            content: `Extract lead information from this conversation:\n\n${truncatedTranscript}`
           }
         ],
         temperature: 0.1,
         max_tokens: 200
-      })
+      }),
+      signal: AbortSignal.timeout(30000)
     });
 
     if (!response.ok) {
-      console.error('[Lead Capture] Groq API error:', response.status);
+      const errorBody = await response.text();
+      console.error('[Lead Capture] Groq API error:', response.status, errorBody);
       return;
     }
 
@@ -927,7 +925,7 @@ Examples:
     }
 
     // Save to database
-    const { error } = await session.supabase
+    const { error } = await supabaseClient
       .from('leads')
       .insert({
         client_id: session.clientId,
@@ -1083,6 +1081,18 @@ async function processCalendarBooking(session: any, sessionId: string, supabaseC
       .map((msg: any) => `${msg.role === 'user' ? 'Customer' : 'AI'}: ${msg.content}`)
       .join('\n');
 
+    // Validate transcript is not empty
+    if (!transcript || transcript.trim().length === 0) {
+      console.log('[Booking] Empty transcript, skipping');
+      return;
+    }
+
+    // Truncate if too long
+    const maxLength = 8000;
+    const truncatedTranscript = transcript.length > maxLength
+      ? transcript.substring(0, maxLength) + '...[truncated]'
+      : transcript;
+
     console.log('[Booking] Analyzing conversation for booking intent...');
 
     // Use LLM to check if conversation contains booking request
@@ -1093,7 +1103,7 @@ async function processCalendarBooking(session: any, sessionId: string, supabaseC
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama-3.1-70b-versatile',
+        model: 'openai/gpt-oss-20b',
         messages: [
           {
             role: 'system',
@@ -1121,18 +1131,18 @@ Examples:
           },
           {
             role: 'user',
-            content: `Analyze this conversation for booking intent:\n\n${transcript}`
+            content: `Analyze this conversation for booking intent:\n\n${truncatedTranscript}`
           }
         ],
         temperature: 0.1,
-        max_tokens: 300,
-        signal: AbortSignal.timeout(30000)
+        max_tokens: 300
       }),
       signal: AbortSignal.timeout(30000)
     });
 
     if (!response.ok) {
-      console.error('[Booking] Groq API error:', response.status);
+      const errorBody = await response.text();
+      console.error('[Booking] Groq API error:', response.status, errorBody);
       return;
     }
 
