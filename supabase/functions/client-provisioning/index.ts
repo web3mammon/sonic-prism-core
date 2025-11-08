@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
-import { encode as encodeMulaw } from 'https://esm.sh/alawmulaw@5.0.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -508,72 +507,8 @@ Keep responses natural, concise, and helpful.`,
   return industryPrompts[normalized] || industryPrompts['default'];
 }
 
-// ITU-T G.711 μ-law encoding for 16-bit PCM (GStreamer reference implementation)
-// Based on: https://github.com/GStreamer/gst-plugins-good/blob/master/gst/law/mulaw-conversion.c
-const MULAW_BIAS = 0x84;  // Bias for 16-bit samples (132 decimal)
-const MULAW_CLIP = 32635;  // Clipping threshold
-
-// Exponent lookup table (GStreamer implementation)
-const EXP_LUT = [
-  0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
-  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
-  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
-];
-
-function lin2mulaw(sample: number): number {
-  let sign, exponent, mantissa, ulawbyte;
-
-  // Get the sign
-  sign = (sample >> 8) & 0x80;
-  if (sign !== 0) {
-    sample = -sample;
-  }
-
-  // Clip the magnitude
-  if (sample > MULAW_CLIP) {
-    sample = MULAW_CLIP;
-  }
-
-  // Add bias
-  sample = sample + MULAW_BIAS;
-
-  // Find exponent using lookup table
-  exponent = EXP_LUT[(sample >> 7) & 0xFF];
-
-  // Find mantissa
-  mantissa = (sample >> (exponent + 3)) & 0x0F;
-
-  // Combine and invert
-  ulawbyte = ~(sign | (exponent << 4) | mantissa);
-
-  return ulawbyte & 0xFF;
-}
-
-function pcm16ToUlaw(pcmData: ArrayBuffer): Uint8Array {
-  const pcm16 = new Int16Array(pcmData);
-  const ulaw = new Uint8Array(pcm16.length);
-
-  for (let i = 0; i < pcm16.length; i++) {
-    ulaw[i] = lin2mulaw(pcm16[i]);
-  }
-
-  return ulaw;
-}
-
 // Helper: Generate intro audio using ElevenLabs streaming API
+// Simply fetch the requested format directly from ElevenLabs (no conversion)
 async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8000' | 'mp3_44100'): Promise<ArrayBuffer | null> {
   const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
 
@@ -585,9 +520,8 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
   try {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`;
 
-    // For μ-law, get PCM and convert ourselves (ElevenLabs ulaw_8000 returns MP3!)
-    const elevenLabsFormat = format === 'ulaw_8000' ? 'pcm_16000' : 'mp3_44100';
-    const acceptHeader = format === 'ulaw_8000' ? 'audio/pcm' : 'audio/mpeg';
+    // Request the format directly from ElevenLabs
+    const acceptHeader = format === 'ulaw_8000' ? 'audio/basic' : 'audio/mpeg';
 
     const response = await fetch(url, {
       method: 'POST',
@@ -599,7 +533,7 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
       body: JSON.stringify({
         text: text,
         model_id: 'eleven_turbo_v2_5',
-        output_format: elevenLabsFormat,
+        output_format: format,
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -609,32 +543,12 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[ElevenLabs] Error response (${elevenLabsFormat}):`, response.status, errorText);
+      console.error(`[ElevenLabs] Error response (${format}):`, response.status, errorText);
       return null;
     }
 
     const audioBuffer = await response.arrayBuffer();
-    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${elevenLabsFormat} audio`);
-
-    // Convert PCM16 16kHz to μ-law 8kHz if needed
-    if (format === 'ulaw_8000') {
-      // PCM16 is signed 16-bit integers
-      const pcm16 = new Int16Array(audioBuffer);
-      console.log(`[ElevenLabs] PCM16 samples: ${pcm16.length}`);
-
-      // Downsample from 16kHz to 8kHz (take every other sample)
-      const pcm8k = new Int16Array(pcm16.length / 2);
-      for (let i = 0; i < pcm8k.length; i++) {
-        pcm8k[i] = pcm16[i * 2];
-      }
-      console.log(`[ElevenLabs] Downsampled to 8kHz: ${pcm8k.length} samples`);
-
-      // Encode to μ-law using proven library (same as Python's audioop.lin2ulaw)
-      const ulawData = encodeMulaw(pcm8k);
-      console.log(`[ElevenLabs] Encoded to μ-law: ${ulawData.length} bytes`);
-
-      return ulawData.buffer;
-    }
+    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${format} audio`);
 
     return audioBuffer;
 
