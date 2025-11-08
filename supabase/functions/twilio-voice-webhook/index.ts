@@ -275,122 +275,10 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
 
       console.log(`[Twilio] ✅ Client loaded: ${client.business_name}`);
 
-      // Check user access (trial + subscription logic)
-      const accessCheck = await checkUserAccess(client);
-
-      if (!accessCheck.allowed) {
-        console.log(`[Access] ❌ Access denied - ${accessCheck.reason}`);
-
-        // Determine rejection message based on reason
-        let rejectionMessage = "Thank you for calling. ";
-        if (accessCheck.reason === 'trial_minutes_exhausted') {
-          rejectionMessage += "You have reached your trial limit. Please upgrade your account to continue.";
-        } else if (accessCheck.reason === 'trial_expired_time') {
-          rejectionMessage += "Your 3-day free trial has expired. Please visit your dashboard to upgrade your plan and continue using our service.";
-        } else if (accessCheck.reason === 'trial_expired_credits') {
-          rejectionMessage += "You have used all your free trial minutes. Please visit your dashboard to upgrade your plan and continue making calls.";
-        } else {
-          rejectionMessage += "Your account has run out of credits. Please visit your dashboard to add more credits or upgrade your plan.";
-        }
-
-        // Load voice profile first to get correct voice for rejection message
-        let rejectionVoiceId = client.voice_id || 'pNInz6obpgDQGcFmaJgB'; // Default to Adam
-
-        try {
-          const audioResponse = await generateTTS(rejectionMessage, rejectionVoiceId);
-          if (audioResponse && streamSid) {
-            socket.send(JSON.stringify({
-              event: 'media',
-              streamSid: streamSid,
-              media: { payload: audioResponse }
-            }));
-
-            // Wait a bit for audio to play, then hang up
-            await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds for longer message
-          }
-        } catch (error) {
-          console.error('[Twilio] Error playing rejection message:', error);
-        }
-
-        // Hang up the call
-        socket.send(JSON.stringify({
-          event: 'stop',
-          streamSid: streamSid
-        }));
-        socket.close();
-        return;
-      }
-
-      console.log(`[Access] ✅ Access granted - ${accessCheck.reason}`);
-
-      // Load voice profile
-      let voiceProfile = null;
-      if (client.voice_id) {
-        const { data: profile, error: profileError } = await supabaseClient
-          .from('voice_profiles')
-          .select('*')
-          .eq('voice_id', client.voice_id)
-          .single();
-
-        if (profileError) {
-          console.error('[Twilio] Failed to load voice profile:', profileError);
-        } else {
-          voiceProfile = profile;
-          console.log(`[Twilio] ✅ Voice profile loaded: ${profile.name} (${profile.accent})`);
-        }
-      }
-
-      // Check if database session already exists (from test-voice-call or webhook)
-      const { data: existingSession } = await supabaseClient
-        .from('call_sessions')
-        .select('id')
-        .eq('call_sid', callSid)
-        .maybeSingle();
-
-      if (existingSession) {
-        console.log('[Twilio] ✅ Database session already exists (from test-voice-call)');
-        // Just update the status
-        await supabaseClient
-          .from('call_sessions')
-          .update({
-            status: 'in-progress',
-            metadata: {
-              direction,
-              called_number: called,
-              stream_sid: streamSid
-            }
-          })
-          .eq('call_sid', callSid);
-      } else {
-        console.log('[Twilio] Creating new database session');
-        // Create database session
-        const { error: dbError } = await supabaseClient
-          .from('call_sessions')
-          .insert({
-            call_sid: callSid,
-            client_id: clientId,
-            caller_number: caller || '',
-            status: 'in-progress',
-            start_time: new Date().toISOString(),
-            metadata: {
-              direction,
-              called_number: called,
-              stream_sid: streamSid
-            }
-          });
-
-        if (dbError) {
-          console.error('[Twilio] Failed to create DB session:', dbError);
-          // Continue anyway
-        } else {
-          console.log('[Twilio] ✅ Database session created');
-        }
-      }
-
-      // Create in-memory session
+      // Create in-memory session immediately (minimal blocking) - MATCH chat-websocket
       const newSession: TwilioVoiceSession = {
         client,
-        voiceProfile, // Voice profile from database
+        voiceProfile: null, // Load in background
         callSid,
         callerNumber: caller || '',
         streamSid,
@@ -399,18 +287,15 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         conversationLog: [],
         assemblyaiConnection: null,
         sessionStartTime: Date.now(),
-        isProcessing: false, // Match chat-websocket pattern
+        isProcessing: false,
         currentSocket: socket,
-        // Keepalive timer for Supabase
         supabaseKeepaliveTimer: null,
-        // AssemblyAI buffer (batches 20ms Twilio chunks into 100ms for AssemblyAI)
         assemblyaiBuffer: [],
       };
 
       sessions.set(callSid, newSession);
-      console.log('[Twilio] ✅ In-memory session created');
 
-      // Initialize AssemblyAI
+      // Initialize AssemblyAI connection FIRST (critical path) - MATCH chat-websocket
       const assemblyaiReady = await initializeAssemblyAI(callSid, socket);
       if (!assemblyaiReady) {
         console.error('[Twilio] Failed to initialize AssemblyAI');
@@ -418,12 +303,94 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         return;
       }
 
-      // TODO: Fix intro audio later - disabled for now
-      // const introFileName = `${clientId}_intro.ulaw`;
-      // console.log(`[Twilio] Playing pre-recorded greeting: ${introFileName}`);
-      // await playPreRecordedAudio(callSid, socket, introFileName);
+      console.log('[Twilio] ✅ AI ready for user speech');
 
-      console.log('[Twilio] Skipping intro audio - AI ready for user speech');
+      // Background operations (non-blocking) - MATCH chat-websocket
+      // Load voice profile in background
+      if (client.voice_id) {
+        supabaseClient
+          .from('voice_profiles')
+          .select('*')
+          .eq('voice_id', client.voice_id)
+          .single()
+          .then(({ data: profile, error: profileError }) => {
+            if (profileError) {
+              console.error('[Twilio] Failed to load voice profile:', profileError);
+            } else {
+              newSession.voiceProfile = profile;
+              console.log(`[Twilio] ✅ Voice profile loaded: ${profile.name} (${profile.accent})`);
+            }
+          });
+      }
+
+      // Check user access in background - MATCH chat-websocket
+      checkUserAccess(client).then(accessCheck => {
+        if (!accessCheck.allowed) {
+          console.log(`[Access] ❌ Access denied - ${accessCheck.reason}`);
+
+          let rejectionMessage = "Thank you for calling. ";
+          if (accessCheck.reason === 'trial_minutes_exhausted') {
+            rejectionMessage += "You have reached your trial limit. Please upgrade your account to continue.";
+          } else if (accessCheck.reason === 'trial_expired_time') {
+            rejectionMessage += "Your 3-day free trial has expired. Please visit your dashboard to upgrade your plan and continue using our service.";
+          } else if (accessCheck.reason === 'trial_expired_credits') {
+            rejectionMessage += "You have used all your free trial minutes. Please visit your dashboard to upgrade your plan and continue making calls.";
+          } else {
+            rejectionMessage += "Your account has run out of credits. Please visit your dashboard to add more credits or upgrade your plan.";
+          }
+
+          socket.send(JSON.stringify({
+            event: 'stop',
+            streamSid: streamSid
+          }));
+          socket.close();
+        } else {
+          console.log(`[Access] ✅ Access granted - ${accessCheck.reason}`);
+        }
+      });
+
+      // Create/update database session in background - MATCH chat-websocket
+      supabaseClient
+        .from('call_sessions')
+        .select('id')
+        .eq('call_sid', callSid)
+        .maybeSingle()
+        .then(({ data: existingSession }) => {
+          if (existingSession) {
+            console.log('[Twilio] ✅ Database session already exists (from test-voice-call)');
+            return supabaseClient
+              .from('call_sessions')
+              .update({
+                status: 'in-progress',
+                metadata: { direction, called_number: called, stream_sid: streamSid }
+              })
+              .eq('call_sid', callSid);
+          } else {
+            console.log('[Twilio] Creating new database session');
+            return supabaseClient
+              .from('call_sessions')
+              .insert({
+                call_sid: callSid,
+                client_id: clientId,
+                caller_number: caller || '',
+                status: 'in-progress',
+                start_time: new Date().toISOString(),
+                metadata: { direction, called_number: called, stream_sid: streamSid }
+              });
+          }
+        })
+        .then(() => {
+          console.log('[Twilio] ✅ Database session ready');
+        })
+        .catch(err => {
+          console.error('[Twilio] Background DB error:', err);
+        });
+
+      // TODO: Play intro audio in background (like chat-websocket)
+      // playIntroAudio(callSid, socket, supabaseClient).catch(err =>
+      //   console.error('[IntroAudio] Background play error:', err)
+      // );
+
       break;
 
     case 'media':
