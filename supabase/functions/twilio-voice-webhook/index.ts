@@ -671,10 +671,11 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
       body: JSON.stringify({
         model: 'openai/gpt-oss-20b',
         messages,
-        max_tokens: 150,
+        max_tokens: 500,
         temperature: 0.7,
         stream: true
-      })
+      }),
+      signal: AbortSignal.timeout(30000) // 30 second timeout
     });
 
     if (!response.ok) {
@@ -1012,6 +1013,8 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
 
   } catch (error) {
     console.error('[GPT-OSS] Error:', error);
+    console.error('[GPT-OSS] Error details:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('[GPT-OSS] Stack:', error instanceof Error ? error.stack : 'No stack trace');
   } finally {
     // Match chat-websocket: Always reset processing flag
     session.isProcessing = false;
