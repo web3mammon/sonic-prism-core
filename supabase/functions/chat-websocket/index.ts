@@ -24,6 +24,49 @@ interface VoiceSession {
   isProcessing: boolean;
 }
 
+// Convert PCM to WAV by adding WAV header (same as marketing-edge-function)
+function pcmToWav(pcmData: Uint8Array, sampleRate: number, numChannels: number = 1, bitsPerSample: number = 16): Uint8Array {
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const dataSize = pcmData.length;
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+
+  // RIFF identifier
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  // File length
+  view.setUint32(4, 36 + dataSize, true);
+  // RIFF type
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+  // Format chunk identifier
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  // Format chunk length
+  view.setUint32(16, 16, true);
+  // Sample format (raw)
+  view.setUint16(20, 1, true);
+  // Channel count
+  view.setUint16(22, numChannels, true);
+  // Sample rate
+  view.setUint32(24, sampleRate, true);
+  // Byte rate
+  view.setUint32(28, byteRate, true);
+  // Block align
+  view.setUint16(32, blockAlign, true);
+  // Bits per sample
+  view.setUint16(34, bitsPerSample, true);
+  // Data chunk identifier
+  view.setUint32(36, 0x64617461, false); // "data"
+  // Data chunk length
+  view.setUint32(40, dataSize, true);
+
+  // Combine header + PCM data
+  const wavFile = new Uint8Array(header.byteLength + pcmData.length);
+  wavFile.set(new Uint8Array(header), 0);
+  wavFile.set(pcmData, header.byteLength);
+
+  return wavFile;
+}
+
 const sessions = new Map<string, VoiceSession>();
 
 serve(async (req) => {
@@ -566,11 +609,11 @@ async function generateSpeechChunk(sessionId: string, text: string, socket: WebS
     console.log(`[ElevenLabs-Chunk #${chunkIndex}] Generating TTS for: "${speechText.substring(0, 50)}..."`);
 
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_22050`,
       {
         method: 'POST',
         headers: {
-          'Accept': 'audio/mpeg',
+          'Accept': 'audio/pcm',
           'Content-Type': 'application/json',
           'xi-api-key': ELEVENLABS_API_KEY
         },
@@ -593,13 +636,16 @@ async function generateSpeechChunk(sessionId: string, text: string, socket: WebS
     }
 
     const audioArrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(audioArrayBuffer);
+    const pcmData = new Uint8Array(audioArrayBuffer);
+
+    // Convert PCM to WAV (add WAV header so browsers can play it)
+    const wavData = pcmToWav(pcmData, 22050, 1, 16);
 
     // Convert to base64
     let binary = '';
     const chunkSize = 0x8000;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    for (let i = 0; i < wavData.length; i += chunkSize) {
+      const chunk = wavData.subarray(i, Math.min(i + chunkSize, wavData.length));
       binary += String.fromCharCode.apply(null, Array.from(chunk));
     }
     const audioBase64 = btoa(binary);
@@ -607,11 +653,11 @@ async function generateSpeechChunk(sessionId: string, text: string, socket: WebS
     socket.send(JSON.stringify({
       type: 'audio.chunk',
       audio: audioBase64,
-      format: 'mp3',
+      format: 'wav',
       chunk_index: chunkIndex
     }));
 
-    console.log(`[ElevenLabs-Chunk #${chunkIndex}] Sent audio (${bytes.length} bytes) in ${Date.now() - startTime}ms`);
+    console.log(`[ElevenLabs-Chunk #${chunkIndex}] Sent WAV audio (${wavData.length} bytes) in ${Date.now() - startTime}ms`);
   } catch (error) {
     console.error(`[ElevenLabs-Chunk #${chunkIndex}] Error:`, error);
   }
