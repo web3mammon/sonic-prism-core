@@ -427,7 +427,11 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
           system_prompt: session.client.system_prompt,
           channel_type: 'website',
           business_hours: session.client.business_hours,
-          timezone: session.client.timezone
+          timezone: session.client.timezone,
+          // Transfer fields (website = email fallback only, no actual transfer)
+          call_transfer_enabled: session.client.call_transfer_enabled,
+          call_transfer_number: session.client.call_transfer_number,
+          email: session.client.email
         },
         session.voiceProfile
       )

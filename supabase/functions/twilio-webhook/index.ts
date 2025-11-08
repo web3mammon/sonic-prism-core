@@ -60,20 +60,20 @@ async function handleVoiceWebhook(req: Request, supabase: any) {
 
   console.log(`Call direction: ${direction}`);
 
-  // Find the client by phone number based on call direction
-  // INBOUND: client phone = To (our number)
-  // OUTBOUND: client phone = From (our number)
+  // Find the client by Twilio provisioned number based on call direction
+  // INBOUND: client's twilio_number = To (our number that was called)
+  // OUTBOUND: client's twilio_number = From (our number making the call)
   const lookupNumber = direction === 'outbound-api' ? from : to;
-  console.log(`Looking up client by phone: ${lookupNumber}`);
+  console.log(`Looking up client by Twilio number: ${lookupNumber}`);
 
   const { data: client } = await supabase
     .from('voice_ai_clients')
     .select('*')
-    .eq('phone_number', lookupNumber)
+    .eq('twilio_number', lookupNumber)
     .single();
 
   if (!client) {
-    console.error(`No client found for phone number: ${lookupNumber} (direction: ${direction})`);
+    console.error(`No client found for Twilio number: ${lookupNumber} (direction: ${direction})`);
     return new Response('<?xml version="1.0" encoding="UTF-8"?><Response><Say>Sorry, this number is not configured.</Say><Hangup/></Response>', {
       headers: { 'Content-Type': 'text/xml' }
     });

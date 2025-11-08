@@ -149,9 +149,9 @@ export function SetupModal({
                 <div className="text-sm space-y-1 text-muted-foreground">
                   <p className="font-medium text-foreground">Instructions:</p>
                   <ol className="list-decimal list-inside space-y-1 ml-2">
-                    <li>Forward your business calls to this number</li>
+                    <li>Use this number directly or forward your existing business line to it</li>
                     <li>Your AI assistant answers 24/7 automatically</li>
-                    <li>View all call logs in your dashboard</li>
+                    <li>View all call logs and transcripts in your dashboard</li>
                   </ol>
                 </div>
               </div>

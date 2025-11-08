@@ -178,6 +178,7 @@ serve(async (req) => {
         region: requestData.region,
         industry: requestData.industry,
         phone_number: requestData.phone_number,
+        call_transfer_number: requestData.phone_number, // Default to same as phone_number (user can change later)
         voice_id: voice_id,
         greeting_message: greeting_text,
         system_prompt: system_prompt,

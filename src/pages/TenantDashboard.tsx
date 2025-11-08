@@ -286,7 +286,7 @@ export default function Dashboard() {
       )}
 
       {/* Phone Provisioning Alert (Phone/Both users need Twilio number) */}
-      {(channelType === 'phone' || channelType === 'both') && (
+      {(channelType === 'phone' || channelType === 'both') && !client?.twilio_number && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -807,7 +807,7 @@ export default function Dashboard() {
         isOpen={isSetupModalOpen}
         onClose={() => setIsSetupModalOpen(false)}
         channelType={client?.channel_type}
-        twilioPhoneNumber={client?.phone_number}
+        twilioPhoneNumber={client?.twilio_number}
         clientId={client?.client_id}
       />
     </div>

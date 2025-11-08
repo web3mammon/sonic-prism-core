@@ -578,7 +578,7 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
           tone: session.client.tone,
           // Call transfer fields
           call_transfer_enabled: session.client.call_transfer_enabled,
-          call_transfer_number: session.client.call_transfer_number,
+          call_transfer_number: session.client.call_transfer_number, // Defaults to phone_number during onboarding
           email: session.client.email
         },
         session.voiceProfile
