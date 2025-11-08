@@ -507,30 +507,55 @@ Keep responses natural, concise, and helpful.`,
   return industryPrompts[normalized] || industryPrompts['default'];
 }
 
-// Standard ITU-T G.711 μ-law encoding (proven implementation)
-// Based on: https://github.com/rochars/alawmulaw
-const MULAW_BIAS = 33;
-const MULAW_MAX = 0x1FFF;
+// ITU-T G.711 μ-law encoding for 16-bit PCM (GStreamer reference implementation)
+// Based on: https://github.com/GStreamer/gst-plugins-good/blob/master/gst/law/mulaw-conversion.c
+const MULAW_BIAS = 0x84;  // Bias for 16-bit samples (132 decimal)
+const MULAW_CLIP = 32635;  // Clipping threshold
+
+// Exponent lookup table (GStreamer implementation)
+const EXP_LUT = [
+  0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+  4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+  6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7,
+  7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7
+];
 
 function lin2mulaw(sample: number): number {
   let sign, exponent, mantissa, ulawbyte;
 
-  // Get the sign and the magnitude
+  // Get the sign
   sign = (sample >> 8) & 0x80;
-  if (sign) sample = -sample;
+  if (sign !== 0) {
+    sample = -sample;
+  }
 
-  // Convert to 14-bit range
+  // Clip the magnitude
+  if (sample > MULAW_CLIP) {
+    sample = MULAW_CLIP;
+  }
+
+  // Add bias
   sample = sample + MULAW_BIAS;
-  sample = Math.min(sample, MULAW_MAX);
 
-  // Find exponent
-  exponent = 7;
-  for (let expMask = 0x4000; (sample & expMask) === 0 && exponent > 0; exponent--, expMask >>= 1);
+  // Find exponent using lookup table
+  exponent = EXP_LUT[(sample >> 7) & 0xFF];
 
   // Find mantissa
   mantissa = (sample >> (exponent + 3)) & 0x0F;
 
-  // Combine
+  // Combine and invert
   ulawbyte = ~(sign | (exponent << 4) | mantissa);
 
   return ulawbyte & 0xFF;
@@ -559,10 +584,9 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
   try {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`;
 
-    // For μ-law, get PCM and convert ourselves (ElevenLabs ulaw_8000 returns MP3!)
-    // For MP3, get MP3 directly
-    const elevenLabsFormat = format === 'ulaw_8000' ? 'pcm_8000' : 'mp3_44100';
-    const acceptHeader = format === 'ulaw_8000' ? 'audio/pcm' : 'audio/mpeg';
+    // Get format directly from ElevenLabs - they handle the encoding
+    const elevenLabsFormat = format;
+    const acceptHeader = format === 'ulaw_8000' ? 'audio/basic' : 'audio/mpeg';
 
     const response = await fetch(url, {
       method: 'POST',
@@ -589,15 +613,9 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
     }
 
     const audioBuffer = await response.arrayBuffer();
-    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${elevenLabsFormat} audio`);
+    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${format} audio`);
 
-    // Convert PCM to μ-law if needed
-    if (format === 'ulaw_8000') {
-      const ulawData = pcm16ToUlaw(audioBuffer);
-      console.log(`[ElevenLabs] Converted to μ-law: ${ulawData.length} bytes`);
-      return ulawData.buffer;
-    }
-
+    // Return audio directly from ElevenLabs
     return audioBuffer;
 
   } catch (error) {

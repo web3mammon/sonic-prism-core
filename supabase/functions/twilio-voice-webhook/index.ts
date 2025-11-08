@@ -36,6 +36,8 @@ interface TwilioVoiceSession {
   currentSocket: WebSocket | null;
   // Keepalive timer for Supabase
   supabaseKeepaliveTimer: number | null;
+  // AssemblyAI audio buffer (Twilio sends 20ms chunks, AssemblyAI needs 50-1000ms)
+  assemblyaiBuffer: Uint8Array[];
 }
 
 const sessions = new Map<string, TwilioVoiceSession>();
@@ -181,41 +183,43 @@ async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): P
       try {
         const data = JSON.parse(event.data);
 
-        // Handle formatted turns (final transcripts with turn detection)
-        if (data.message_type === 'turn_formatted') {
-          const transcript = data.text?.trim();
+        // AssemblyAI v3 API (same as chat-websocket)
+        const msgType = data.type;
 
-          if (transcript && !session.isProcessing) {
-            console.log(`[AssemblyAI] Final transcript: ${transcript}`);
+        if (msgType === 'Begin') {
+          console.log(`[AssemblyAI] Session began: ID=${data.id}`);
+        } else if (msgType === 'Turn') {
+          const transcript = data.transcript?.trim();
+          const isFormatted = data.turn_is_formatted;
 
-            session.isProcessing = true;
+          if (transcript) {
+            console.log(`[AssemblyAI] ${isFormatted ? 'Final' : 'Partial'}: ${transcript}`);
 
-            session.conversationLog.push({
-              speaker: 'user',
-              content: transcript,
-              timestamp: new Date().toISOString(),
-              message_type: 'transcription'
-            });
-
-            // Process with GPT streaming
-            await processWithGPTStreaming(callSid, transcript, twilioSocket);
-          }
-        } else if (data.message_type === 'partial_transcript') {
-          // Partial transcript - interrupt detection
-          const partialText = data.text?.trim();
-          if (partialText) {
-            console.log(`[AssemblyAI] Partial: ${partialText}`);
-
-            // Interrupt AI if it's currently speaking/processing
-            if (session.isProcessing) {
-              console.log('[Interrupt] User interrupted AI - stopping current response');
+            // INTERRUPT DETECTION: Partial transcript while AI is speaking = user interrupting
+            if (!isFormatted && session.isProcessing) {
+              console.log(`[Interrupt] User interrupted with: "${transcript}"`);
               session.isProcessing = false;
-              // Note: For Twilio, we can't stop audio already sent to phone
-              // But we stop generating/sending new chunks
+              // This stops any pending TTS chunk generation
+              return; // Don't process further
+            }
+
+            // Process formatted (final) transcripts
+            if (isFormatted && !session.isProcessing) {
+              session.isProcessing = true;
+
+              session.conversationLog.push({
+                speaker: 'user',
+                content: transcript,
+                timestamp: new Date().toISOString(),
+                message_type: 'transcription'
+              });
+
+              // Process with GPT streaming
+              await processWithGPTStreaming(callSid, transcript, twilioSocket);
             }
           }
-        } else if (data.message_type === 'session_created') {
-          console.log(`[AssemblyAI] Session created:`, data.session_id);
+        } else if (msgType === 'Termination') {
+          console.log(`[AssemblyAI] Session terminated: Audio=${data.audio_duration_seconds}s`);
         }
       } catch (error) {
         console.error('[AssemblyAI] Message parsing error:', error);
@@ -425,6 +429,8 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         currentSocket: socket,
         // Keepalive timer for Supabase
         supabaseKeepaliveTimer: null,
+        // AssemblyAI buffer (batches 20ms Twilio chunks into 100ms for AssemblyAI)
+        assemblyaiBuffer: [],
       };
 
       sessions.set(callSid, newSession);
@@ -438,15 +444,9 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         return;
       }
 
-      // Play pre-recorded intro audio (auto-generated during onboarding)
-      // Using exact FastAPI pattern: 8000-byte chunks, 10ms delay
-      const introFileName = `${clientId}_intro.ulaw`;
-      console.log(`[Twilio] Playing pre-recorded greeting: ${introFileName}`);
-      await playPreRecordedAudio(callSid, socket, introFileName);
-
-      // Mark intro as played in session memory
+      // TEMPORARILY DISABLED: Skip intro audio to test core voice AI functionality
+      console.log('[Twilio] Skipping intro audio - waiting for user to speak first');
       newSession.sessionMemory.intro_played = true;
-      console.log('[Twilio] Greeting played - AI now listening for user response');
       break;
 
     case 'media':
@@ -469,12 +469,36 @@ async function handleTwilioAudio(callSid: string, audioPayloadBase64: string) {
   if (!session || !session.assemblyaiConnection) return;
 
   try {
-    // Decode μ-law audio from Twilio
+    // Decode μ-law audio from Twilio (20ms chunks = ~160 bytes at 8kHz)
     const audioData = Uint8Array.from(atob(audioPayloadBase64), c => c.charCodeAt(0));
 
-    // Forward to AssemblyAI (already in μ-law format that AssemblyAI supports)
-    if (session.assemblyaiConnection.readyState === WebSocket.OPEN) {
-      session.assemblyaiConnection.send(audioData);
+    // CRITICAL: AssemblyAI requires 50-1000ms chunks
+    // Twilio sends 20ms chunks - we need to buffer them into 100ms batches
+    session.assemblyaiBuffer.push(audioData);
+
+    // Send when we have ~100ms of audio (5 chunks × 20ms = 100ms)
+    if (session.assemblyaiBuffer.length >= 5) {
+      // Calculate total size
+      const totalSize = session.assemblyaiBuffer.reduce((sum, chunk) => sum + chunk.length, 0);
+
+      // Combine all buffered chunks into one
+      const combinedAudio = new Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of session.assemblyaiBuffer) {
+        combinedAudio.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      // Send combined chunk to AssemblyAI
+      if (session.assemblyaiConnection.readyState === WebSocket.OPEN) {
+        session.assemblyaiConnection.send(combinedAudio);
+        console.log(`[AssemblyAI] Sent ${totalSize} bytes (${session.assemblyaiBuffer.length} chunks buffered)`);
+      } else {
+        console.error(`[AssemblyAI] Cannot send - WebSocket state: ${session.assemblyaiConnection.readyState}`);
+      }
+
+      // Clear buffer
+      session.assemblyaiBuffer = [];
     }
   } catch (error) {
     console.error('[Twilio] Error processing audio:', error);
@@ -499,8 +523,33 @@ async function playPreRecordedAudio(callSid: string, socket: WebSocket, audioFil
     }
 
     const audioArrayBuffer = await response.arrayBuffer();
-    const ulawData = new Uint8Array(audioArrayBuffer);
+    let ulawData = new Uint8Array(audioArrayBuffer);
     console.log(`[PreRecorded] Fetched ${ulawData.length} bytes in ${Date.now() - startTime}ms`);
+
+    // Log first 20 bytes to diagnose headers
+    const first20 = Array.from(ulawData.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+    console.log(`[PreRecorded] First 20 bytes: ${first20}`);
+
+    // Twilio says: "Should NOT include audio file type header bytes"
+    // Check for common audio file headers and strip them
+
+    // WAV/RIFF header (starts with "RIFF")
+    if (ulawData.length > 44 &&
+        ulawData[0] === 0x52 && ulawData[1] === 0x49 &&
+        ulawData[2] === 0x46 && ulawData[3] === 0x46) {
+      console.log('[PreRecorded] ⚠️ Detected RIFF/WAV header, stripping 44 bytes');
+      ulawData = ulawData.slice(44);
+    }
+
+    // Check for .AU file header (starts with .snd)
+    else if (ulawData.length > 24 &&
+        ulawData[0] === 0x2e && ulawData[1] === 0x73 &&
+        ulawData[2] === 0x6e && ulawData[3] === 0x64) {
+      console.log('[PreRecorded] ⚠️ Detected .AU header, stripping 24 bytes');
+      ulawData = ulawData.slice(24);
+    }
+
+    console.log(`[PreRecorded] Final audio size: ${ulawData.length} bytes (after header check)`);
 
     // EXACT MATCH TO FASTAPI: Send in 8000-byte chunks (1 second of 8kHz μ-law)
     const CHUNK_SIZE = 8000;

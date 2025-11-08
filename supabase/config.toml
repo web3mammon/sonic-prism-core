@@ -6,6 +6,12 @@ verify_jwt = false
 [functions.chat-websocket]
 verify_jwt = false
 
+[functions.twilio-voice-webhook]
+verify_jwt = false
+
+[functions.twilio-webhook]
+verify_jwt = false
+
 [functions.serve-audio-snippet]
 verify_jwt = false
 
