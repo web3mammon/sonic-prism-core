@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { encode as encodeMulaw } from 'https://esm.sh/alawmulaw@5.0.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -584,9 +585,9 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
   try {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`;
 
-    // Get format directly from ElevenLabs - they handle the encoding
-    const elevenLabsFormat = format;
-    const acceptHeader = format === 'ulaw_8000' ? 'audio/basic' : 'audio/mpeg';
+    // For μ-law, get PCM and convert ourselves (ElevenLabs ulaw_8000 returns MP3!)
+    const elevenLabsFormat = format === 'ulaw_8000' ? 'pcm_16000' : 'mp3_44100';
+    const acceptHeader = format === 'ulaw_8000' ? 'audio/pcm' : 'audio/mpeg';
 
     const response = await fetch(url, {
       method: 'POST',
@@ -613,9 +614,28 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
     }
 
     const audioBuffer = await response.arrayBuffer();
-    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${format} audio`);
+    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${elevenLabsFormat} audio`);
 
-    // Return audio directly from ElevenLabs
+    // Convert PCM16 16kHz to μ-law 8kHz if needed
+    if (format === 'ulaw_8000') {
+      // PCM16 is signed 16-bit integers
+      const pcm16 = new Int16Array(audioBuffer);
+      console.log(`[ElevenLabs] PCM16 samples: ${pcm16.length}`);
+
+      // Downsample from 16kHz to 8kHz (take every other sample)
+      const pcm8k = new Int16Array(pcm16.length / 2);
+      for (let i = 0; i < pcm8k.length; i++) {
+        pcm8k[i] = pcm16[i * 2];
+      }
+      console.log(`[ElevenLabs] Downsampled to 8kHz: ${pcm8k.length} samples`);
+
+      // Encode to μ-law using proven library (same as Python's audioop.lin2ulaw)
+      const ulawData = encodeMulaw(pcm8k);
+      console.log(`[ElevenLabs] Encoded to μ-law: ${ulawData.length} bytes`);
+
+      return ulawData.buffer;
+    }
+
     return audioBuffer;
 
   } catch (error) {

@@ -189,23 +189,16 @@ async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): P
         if (msgType === 'Begin') {
           console.log(`[AssemblyAI] Session began: ID=${data.id}`);
         } else if (msgType === 'Turn') {
-          const transcript = data.transcript?.trim();
+          const transcript = data.transcript || '';
           const isFormatted = data.turn_is_formatted;
 
-          if (transcript) {
-            console.log(`[AssemblyAI] ${isFormatted ? 'Final' : 'Partial'}: ${transcript}`);
+          if (transcript && transcript.trim()) {
+            console.log(`[AssemblyAI] ${isFormatted ? 'Formatted' : 'Partial'}: ${transcript} | isProcessing=${session.isProcessing} | end_of_turn=${data.end_of_turn}`);
 
-            // INTERRUPT DETECTION: Partial transcript while AI is speaking = user interrupting
-            if (!isFormatted && session.isProcessing) {
-              console.log(`[Interrupt] User interrupted with: "${transcript}"`);
-              session.isProcessing = false;
-              // This stops any pending TTS chunk generation
-              return; // Don't process further
-            }
-
-            // Process formatted (final) transcripts
-            if (isFormatted && !session.isProcessing) {
+            // ONLY process if this is the END of a turn (user finished speaking)
+            if (data.end_of_turn && !session.isProcessing) {
               session.isProcessing = true;
+              console.log(`[Processing] Starting GPT for: "${transcript}"`);
 
               session.conversationLog.push({
                 speaker: 'user',
@@ -214,8 +207,9 @@ async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): P
                 message_type: 'transcription'
               });
 
-              // Process with GPT streaming
               await processWithGPTStreaming(callSid, transcript, twilioSocket);
+            } else if (data.end_of_turn && session.isProcessing) {
+              console.log(`[Skipped] Turn ended but already processing: "${transcript}"`);
             }
           }
         } else if (msgType === 'Termination') {
@@ -444,9 +438,14 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         return;
       }
 
-      // TEMPORARILY DISABLED: Skip intro audio to test core voice AI functionality
-      console.log('[Twilio] Skipping intro audio - waiting for user to speak first');
+      // TODO: Fix intro audio later - disabled for now
+      // const introFileName = `${clientId}_intro.ulaw`;
+      // console.log(`[Twilio] Playing pre-recorded greeting: ${introFileName}`);
+      // await playPreRecordedAudio(callSid, socket, introFileName);
+
+      // Mark intro as played
       newSession.sessionMemory.intro_played = true;
+      console.log('[Twilio] Skipping intro audio - AI ready for user speech');
       break;
 
     case 'media':
@@ -492,7 +491,7 @@ async function handleTwilioAudio(callSid: string, audioPayloadBase64: string) {
       // Send combined chunk to AssemblyAI
       if (session.assemblyaiConnection.readyState === WebSocket.OPEN) {
         session.assemblyaiConnection.send(combinedAudio);
-        console.log(`[AssemblyAI] Sent ${totalSize} bytes (${session.assemblyaiBuffer.length} chunks buffered)`);
+        // Don't log every chunk - too spammy (fires 10x per second)
       } else {
         console.error(`[AssemblyAI] Cannot send - WebSocket state: ${session.assemblyaiConnection.readyState}`);
       }
@@ -1061,16 +1060,7 @@ function sendBufferedAudioChunks(callSid: string) {
   const session = sessions.get(callSid);
   if (!session || !session.currentSocket) return;
 
-  // Check if interrupted - don't send buffered chunks
-  if (!session.isProcessing) {
-    console.log('[AudioQueue] Skipping buffered chunks - interrupted');
-    // Clear buffer on interrupt
-    session.audioChunkBuffer = {};
-    session.nextChunkToSend = 0;
-    return;
-  }
-
-  // Send all sequential chunks that are buffered (like nlc-demo's playBufferedChunks)
+  // Send all sequential chunks that are buffered
   while (session.audioChunkBuffer[session.nextChunkToSend] !== undefined) {
     const audioBytes = session.audioChunkBuffer[session.nextChunkToSend];
     delete session.audioChunkBuffer[session.nextChunkToSend];
@@ -1108,12 +1098,6 @@ function sendBufferedAudioChunks(callSid: string) {
 async function generateAndStreamTTS(callSid: string, text: string, socket: WebSocket, chunkIndex: number) {
   const session = sessions.get(callSid);
   if (!session) return;
-
-  // Check if interrupted before generating TTS
-  if (!session.isProcessing) {
-    console.log(`[ElevenLabs #${chunkIndex}] Skipping TTS - interrupted`);
-    return;
-  }
 
   const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
   if (!ELEVENLABS_API_KEY) {
