@@ -21,7 +21,6 @@ interface TwilioVoiceSession {
   conversationHistory: Array<{ role: string; content: string }>;
   conversationLog: Array<{ speaker: string; content: string; timestamp: string; message_type: string }>;
   assemblyaiConnection: WebSocket | null;
-  isProcessing: boolean;
   sessionStartTime: number;
   // Session management (from FastAPI session.py)
   sessionMemory: {
@@ -193,12 +192,12 @@ async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): P
           const isFormatted = data.turn_is_formatted;
 
           if (transcript && transcript.trim()) {
-            console.log(`[AssemblyAI] ${isFormatted ? 'Formatted' : 'Partial'}: ${transcript} | isProcessing=${session.isProcessing} | end_of_turn=${data.end_of_turn}`);
+            // Simple logging
+            console.log(`[AssemblyAI] ${isFormatted ? 'Formatted' : 'Partial'}: ${transcript}`);
 
-            // ONLY process if this is the END of a turn (user finished speaking)
-            if (data.end_of_turn && !session.isProcessing) {
-              session.isProcessing = true;
-              console.log(`[Processing] Starting GPT for: "${transcript}"`);
+            // SIMPLE: Only process when user finished speaking (end_of_turn=true)
+            if (data.end_of_turn) {
+              console.log(`[Processing] User finished speaking: "${transcript}"`);
 
               session.conversationLog.push({
                 speaker: 'user',
@@ -208,8 +207,6 @@ async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): P
               });
 
               await processWithGPTStreaming(callSid, transcript, twilioSocket);
-            } else if (data.end_of_turn && session.isProcessing) {
-              console.log(`[Skipped] Turn ended but already processing: "${transcript}"`);
             }
           }
         } else if (msgType === 'Termination') {
@@ -409,7 +406,6 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         conversationHistory: [],
         conversationLog: [],
         assemblyaiConnection: null,
-        isProcessing: false,
         sessionStartTime: Date.now(),
         sessionMemory: {
           intro_played: false,
@@ -650,7 +646,6 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
   const GROQ_API_KEY = Deno.env.get('GROQ_API_KEY');
   if (!GROQ_API_KEY) {
     console.error('[GPT-OSS] Groq API key not configured');
-    session.isProcessing = false;
     return;
   }
 
@@ -848,7 +843,6 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
         }
 
         // Continue conversation
-        session.isProcessing = false;
         return;
 
       } else {
@@ -897,8 +891,7 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
             console.log('[Transfer] ✅ Transfer in progress, WebSocket will disconnect automatically');
           }
 
-          // Stop processing, transfer is happening
-          session.isProcessing = false;
+          // Transfer is happening
           return;
 
         } catch (transferError) {
@@ -1051,8 +1044,6 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
 
   } catch (error) {
     console.error('[GPT-OSS] Error:', error);
-  } finally {
-    session.isProcessing = false;
   }
 }
 
