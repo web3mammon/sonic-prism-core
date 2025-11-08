@@ -29,9 +29,6 @@ interface TwilioVoiceSession {
     service_explained: boolean;
   };
   sessionVariables: Record<string, any>;
-  // Audio chunk queue (like nlc-demo AudioPlayer)
-  audioChunkBuffer: { [index: number]: Uint8Array };
-  nextChunkToSend: number;
   currentSocket: WebSocket | null;
   // Keepalive timer for Supabase
   supabaseKeepaliveTimer: number | null;
@@ -413,9 +410,6 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
           service_explained: false,
         },
         sessionVariables: {},
-        // Audio chunk queue (like nlc-demo)
-        audioChunkBuffer: {},
-        nextChunkToSend: 0,
         currentSocket: socket,
         // Keepalive timer for Supabase
         supabaseKeepaliveTimer: null,
@@ -1047,45 +1041,6 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
   }
 }
 
-function sendBufferedAudioChunks(callSid: string) {
-  const session = sessions.get(callSid);
-  if (!session || !session.currentSocket) return;
-
-  // Send all sequential chunks that are buffered
-  while (session.audioChunkBuffer[session.nextChunkToSend] !== undefined) {
-    const audioBytes = session.audioChunkBuffer[session.nextChunkToSend];
-    delete session.audioChunkBuffer[session.nextChunkToSend];
-
-    console.log(`[AudioQueue] Sending chunk #${session.nextChunkToSend} in order (${audioBytes.length} bytes)`);
-
-    // Convert to base64
-    let binary = '';
-    for (let j = 0; j < audioBytes.length; j++) {
-      binary += String.fromCharCode(audioBytes[j]);
-    }
-    const audioBase64 = btoa(binary);
-
-    // Send to Twilio
-    const mediaMessage = {
-      event: 'media',
-      streamSid: session.streamSid,
-      media: {
-        payload: audioBase64
-      }
-    };
-
-    if (session.currentSocket.readyState === WebSocket.OPEN) {
-      session.currentSocket.send(JSON.stringify(mediaMessage));
-      console.log(`[AudioQueue] ✅ Sent chunk #${session.nextChunkToSend}`);
-    } else {
-      console.error('[AudioQueue] WebSocket closed, cannot send chunk');
-      break;
-    }
-
-    session.nextChunkToSend++;
-  }
-}
-
 async function generateAndStreamTTS(callSid: string, text: string, socket: WebSocket, chunkIndex: number) {
   const session = sessions.get(callSid);
   if (!session) return;
@@ -1160,22 +1115,23 @@ async function generateAndStreamTTS(callSid: string, text: string, socket: WebSo
       audioBytes = audioBytes.slice(24);
     }
 
-    console.log(`[ElevenLabs #${chunkIndex}] Buffering audio (${audioBytes.length} bytes) for ordered playback`);
+    // Send audio immediately to Twilio (no buffering like chat-websocket)
+    console.log(`[ElevenLabs #${chunkIndex}] Sending ${audioBytes.length} bytes to Twilio`);
 
-    // Reset buffer when chunk #0 arrives (new response)
-    if (chunkIndex === 0 && session.nextChunkToSend !== 0) {
-      console.log('[AudioQueue] New response detected - resetting queue');
-      session.audioChunkBuffer = {};
-      session.nextChunkToSend = 0;
+    const mediaMessage = {
+      event: 'media',
+      streamSid: session.streamSid,
+      media: {
+        payload: btoa(String.fromCharCode.apply(null, Array.from(audioBytes)))
+      }
+    };
+
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(mediaMessage));
+      console.log(`[ElevenLabs #${chunkIndex}] ✅ Sent in ${Date.now() - startTime}ms`);
+    } else {
+      console.error(`[ElevenLabs #${chunkIndex}] WebSocket closed, cannot send audio`);
     }
-
-    // Buffer the chunk
-    session.audioChunkBuffer[chunkIndex] = audioBytes;
-
-    // Try to send buffered chunks in order
-    sendBufferedAudioChunks(callSid);
-
-    console.log(`[ElevenLabs #${chunkIndex}] ✅ Buffered in ${Date.now() - startTime}ms`);
   } catch (error) {
     console.error(`[ElevenLabs #${chunkIndex}] Error:`, error);
   }
