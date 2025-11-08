@@ -22,13 +22,7 @@ interface TwilioVoiceSession {
   conversationLog: Array<{ speaker: string; content: string; timestamp: string; message_type: string }>;
   assemblyaiConnection: WebSocket | null;
   sessionStartTime: number;
-  // Session management (from FastAPI session.py)
-  sessionMemory: {
-    intro_played: boolean;
-    pricing_discussed: boolean;
-    service_explained: boolean;
-  };
-  sessionVariables: Record<string, any>;
+  isProcessing: boolean; // Match chat-websocket pattern
   currentSocket: WebSocket | null;
   // Keepalive timer for Supabase
   supabaseKeepaliveTimer: number | null;
@@ -189,11 +183,12 @@ async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): P
           const isFormatted = data.turn_is_formatted;
 
           if (transcript && transcript.trim()) {
-            // Simple logging
+            // Log all transcripts (formatted and partial)
             console.log(`[AssemblyAI] ${isFormatted ? 'Formatted' : 'Partial'}: ${transcript}`);
 
-            // SIMPLE: Only process when user finished speaking (end_of_turn=true)
-            if (data.end_of_turn) {
+            // MATCH chat-websocket: Only process formatted transcripts when not already processing
+            if (isFormatted && !session.isProcessing) {
+              session.isProcessing = true;
               console.log(`[Processing] User finished speaking: "${transcript}"`);
 
               session.conversationLog.push({
@@ -404,12 +399,7 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         conversationLog: [],
         assemblyaiConnection: null,
         sessionStartTime: Date.now(),
-        sessionMemory: {
-          intro_played: false,
-          pricing_discussed: false,
-          service_explained: false,
-        },
-        sessionVariables: {},
+        isProcessing: false, // Match chat-websocket pattern
         currentSocket: socket,
         // Keepalive timer for Supabase
         supabaseKeepaliveTimer: null,
@@ -433,8 +423,6 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
       // console.log(`[Twilio] Playing pre-recorded greeting: ${introFileName}`);
       // await playPreRecordedAudio(callSid, socket, introFileName);
 
-      // Mark intro as played
-      newSession.sessionMemory.intro_played = true;
       console.log('[Twilio] Skipping intro audio - AI ready for user speech');
       break;
 
@@ -606,9 +594,6 @@ async function playPreRecordedAudio(callSid: string, socket: WebSocket, audioFil
     }
 
     console.log(`[PreRecorded] ✅ Sent intro audio in ${totalChunks} chunks (${ulawData.length} bytes) in ${Date.now() - startTime}ms`);
-
-    // Mark intro as played
-    session.sessionMemory.intro_played = true;
   } catch (error) {
     console.error('[PreRecorded] Error playing audio:', error);
   }
@@ -629,8 +614,6 @@ async function sendGreeting(callSid: string, socket: WebSocket) {
     timestamp: new Date().toISOString(),
     message_type: 'greeting'
   });
-
-  session.sessionMemory.intro_played = true;
 }
 
 async function processWithGPTStreaming(callSid: string, userInput: string, socket: WebSocket) {
@@ -1027,17 +1010,11 @@ async function processWithGPTStreaming(callSid: string, userInput: string, socke
       message_type: 'ai_response'
     });
 
-    // Mark intro as played after first response
-    if (!session.sessionMemory.intro_played) {
-      session.sessionMemory.intro_played = true;
-      console.log('[Session] Intro marked as played');
-    }
-
-    // Extract session variables (from FastAPI session.py logic)
-    extractSessionVariables(session, userInput, aiResponse);
-
   } catch (error) {
     console.error('[GPT-OSS] Error:', error);
+  } finally {
+    // Match chat-websocket: Always reset processing flag
+    session.isProcessing = false;
   }
 }
 
@@ -1141,70 +1118,31 @@ function buildSystemPromptFallback(session: TwilioVoiceSession): string {
   const client = session.client;
   const businessName = client.business_name || 'the business';
 
-  // Get session context
-  const sessionContext = getSessionContext(session);
-
   return `You are the AI receptionist for ${businessName}, answering customer calls professionally over the phone.
 
-IMPORTANT: If this is the first message (no intro done yet), start with a brief greeting introducing yourself and the business, then ask how you can help.
-
-CONVERSATION STYLE:
-- Keep responses under 40 words for voice clarity
-- Be friendly, professional, and helpful
-- Speak naturally like a real receptionist
-- Don't mention URLs or technical terms
+CONVERSATION STYLE (CRITICAL - FOLLOW EXACTLY):
+- This is a VOICE conversation - speak naturally like a helpful human assistant
+- Keep EVERY response under 40 words maximum for voice clarity
+- Be conversational, warm, and professional
+- Use simple, clear language - avoid jargon unless necessary
+- Ask ONE question at a time if you need clarification
 
 BUSINESS INFORMATION:
-${client.system_prompt || `You help customers with ${businessName}'s services.`}
+${client.system_prompt || `You are a helpful AI assistant for ${businessName}. Answer customer questions about our business, services, and help them with their needs.`}
 
-CURRENT CONVERSATION CONTEXT:
-${sessionContext}
+FORMATTING RULES (MUST FOLLOW):
+- NEVER use tables, bullet points, or formatted lists
+- NEVER use markdown formatting (**, __, etc.)
+- If you need to list items, say them naturally: "We offer three options: first, second, and third"
+- For numbers, use words for small amounts (one, two, three) and digits for large amounts
+- For prices, say naturally: "twenty five dollars" not "$25"
 
-Remember: This is a phone call. Keep it conversational and brief.`;
-}
+RESPONSE LENGTH:
+- Maximum 40 words per response
+- If the answer is long, give a brief summary and offer to explain more
+- Break complex topics into short, digestible chunks
 
-function getSessionContext(session: TwilioVoiceSession): string {
-  const parts: string[] = [];
-
-  // Session memory flags
-  if (session.sessionMemory.intro_played) parts.push('- Intro done');
-  if (session.sessionMemory.pricing_discussed) parts.push('- Pricing already discussed');
-  if (session.sessionMemory.service_explained) parts.push('- Services explained');
-
-  // Session variables
-  for (const [key, value] of Object.entries(session.sessionVariables)) {
-    if (value) parts.push(`- ${key}: ${value}`);
-  }
-
-  return parts.length > 0 ? parts.join('\n') : 'No prior context';
-}
-
-function extractSessionVariables(session: TwilioVoiceSession, userInput: string, aiResponse: string) {
-  const lower = userInput.toLowerCase();
-
-  // Extract customer name
-  if (lower.includes('my name is') || lower.includes('i\'m')) {
-    const words = userInput.split(' ');
-    for (let i = 0; i < words.length - 1; i++) {
-      if (['name', 'i\'m', 'im'].includes(words[i].toLowerCase())) {
-        const name = words[i + 1].replace(/[.,!?]/g, '');
-        if (name.length > 1) {
-          session.sessionVariables.customer_name = name;
-          console.log(`[Session] Extracted customer_name: ${name}`);
-        }
-      }
-    }
-  }
-
-  // Track pricing discussion
-  if (lower.includes('price') || lower.includes('cost') || lower.includes('$')) {
-    session.sessionMemory.pricing_discussed = true;
-  }
-
-  // Track service explanation
-  if (lower.includes('service') || lower.includes('offer') || lower.includes('do you')) {
-    session.sessionMemory.service_explained = true;
-  }
+Remember: Users are LISTENING, not reading. Speak naturally and concisely.`;
 }
 
 async function finalizeCallSession(callSid: string) {
