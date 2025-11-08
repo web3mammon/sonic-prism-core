@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
     const auth = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
 
     const formData = new URLSearchParams({
-      From: client.phone_number,
+      From: client.twilio_number,
       To: phoneNumber,
       Url: webhookUrl,  // Use Url (not Twiml) to point to our webhook
       Method: 'POST',
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
       StatusCallbackMethod: 'POST',
     });
 
-    console.log('Making Twilio API call from', client.phone_number, 'to', phoneNumber);
+    console.log('Making Twilio API call from', client.twilio_number, 'to', phoneNumber);
     const twilioResponse = await fetch(twilioUrl, {
       method: 'POST',
       headers: {

@@ -51,6 +51,7 @@ export function useCurrentClient(): CurrentClientData {
             industry: clientData.industry || industry,
             business_name: clientData.business_name,
             phone_number: clientData.phone_number,
+            twilio_number: clientData.twilio_number,
             channel_type: clientData.channel_type,
             voice_id: clientData.voice_id,  // Top-level voice_id
             status: (clientData.status as 'active' | 'inactive' | 'starting' | 'stopping' | 'error') || 'inactive',

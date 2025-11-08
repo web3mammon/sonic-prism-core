@@ -10,6 +10,7 @@ export interface VoiceAIClient {
   business_name: string;
   status: 'active' | 'inactive' | 'starting' | 'stopping' | 'error';
   phone_number?: string;
+  twilio_number?: string;  // Twilio provisioned number for inbound routing
   channel_type?: 'phone' | 'website' | 'both';
   voice_id?: string;  // Top-level field (matches database schema)
   call_transfer_number?: string;
