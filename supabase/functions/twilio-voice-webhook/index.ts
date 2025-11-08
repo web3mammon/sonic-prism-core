@@ -22,7 +22,9 @@ interface TwilioVoiceSession {
   conversationLog: Array<{ speaker: string; content: string; timestamp: string; message_type: string }>;
   assemblyaiConnection: WebSocket | null;
   sessionStartTime: number;
-  isProcessing: boolean; // Match chat-websocket pattern
+  isProcessing: boolean; // GPT is processing user input
+  isSpeaking: boolean; // AI audio is currently playing
+  currentAudioMark: string | null; // Track which audio chunk is playing
   currentSocket: WebSocket | null;
   // Keepalive timer for Supabase
   supabaseKeepaliveTimer: number | null;
@@ -186,6 +188,24 @@ async function initializeAssemblyAI(callSid: string, twilioSocket: WebSocket): P
             // Log all transcripts (formatted and partial)
             console.log(`[AssemblyAI] ${isFormatted ? 'Formatted' : 'Partial'}: ${transcript}`);
 
+            // INTERRUPT DETECTION: If AI is speaking and user starts talking, stop AI immediately
+            if (session.isSpeaking && !isFormatted) {
+              console.log(`[Interrupt] User interrupted AI - stopping playback`);
+
+              // Send clear event to Twilio to stop audio
+              if (twilioSocket.readyState === WebSocket.OPEN) {
+                twilioSocket.send(JSON.stringify({
+                  event: 'clear',
+                  streamSid: session.streamSid
+                }));
+              }
+
+              // Reset speaking state
+              session.isSpeaking = false;
+              session.currentAudioMark = null;
+              session.isProcessing = false; // Allow new input to be processed
+            }
+
             // MATCH chat-websocket: Only process formatted transcripts when not already processing
             if (isFormatted && !session.isProcessing) {
               session.isProcessing = true;
@@ -288,6 +308,8 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         assemblyaiConnection: null,
         sessionStartTime: Date.now(),
         isProcessing: false,
+        isSpeaking: false,
+        currentAudioMark: null,
         currentSocket: socket,
         supabaseKeepaliveTimer: null,
         assemblyaiBuffer: [], // REQUIRED: AssemblyAI needs 50ms minimum, Twilio sends 20ms
@@ -395,6 +417,16 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
 
     case 'media':
       await handleTwilioAudio(callSid, message.media.payload);
+      break;
+
+    case 'mark':
+      // Twilio returns mark when audio finishes playing
+      const markSession = sessions.get(callSid);
+      if (markSession && message.mark?.name === markSession.currentAudioMark) {
+        markSession.isSpeaking = false;
+        markSession.currentAudioMark = null;
+        console.log(`[Twilio] Audio finished playing: ${message.mark.name}`);
+      }
       break;
 
     case 'stop':
@@ -1073,6 +1105,19 @@ async function generateAndStreamTTS(callSid: string, text: string, socket: WebSo
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(mediaMessage));
       console.log(`[ElevenLabs #${chunkIndex}] ✅ Sent in ${Date.now() - startTime}ms`);
+
+      // Send mark event to track when this audio finishes playing
+      const markName = `audio_${chunkIndex}_${Date.now()}`;
+      session.currentAudioMark = markName;
+      session.isSpeaking = true;
+
+      socket.send(JSON.stringify({
+        event: 'mark',
+        streamSid: session.streamSid,
+        mark: { name: markName }
+      }));
+
+      console.log(`[Twilio] Mark sent: ${markName}`);
     } else {
       console.error(`[ElevenLabs #${chunkIndex}] WebSocket closed, cannot send audio`);
     }
