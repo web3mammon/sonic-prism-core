@@ -438,13 +438,15 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         return;
       }
 
-      // Play pre-recorded intro immediately (instant, pre-warms connections)
-      if (client.intro_audio_file) {
-        console.log('[Twilio] Playing pre-recorded intro audio');
-        await playPreRecordedAudio(callSid, socket, client.intro_audio_file);
-      } else {
-        console.log('[Twilio] No intro audio configured - silence during warmup');
-      }
+      // Play pre-recorded intro audio (auto-generated during onboarding)
+      // Using exact FastAPI pattern: 8000-byte chunks, 10ms delay
+      const introFileName = `${clientId}_intro.ulaw`;
+      console.log(`[Twilio] Playing pre-recorded greeting: ${introFileName}`);
+      await playPreRecordedAudio(callSid, socket, introFileName);
+
+      // Mark intro as played in session memory
+      newSession.sessionMemory.intro_played = true;
+      console.log('[Twilio] Greeting played - AI now listening for user response');
       break;
 
     case 'media':
@@ -497,32 +499,78 @@ async function playPreRecordedAudio(callSid: string, socket: WebSocket, audioFil
     }
 
     const audioArrayBuffer = await response.arrayBuffer();
-    const audioBytes = new Uint8Array(audioArrayBuffer);
-    console.log(`[PreRecorded] Fetched ${audioBytes.length} bytes in ${Date.now() - startTime}ms`);
+    const ulawData = new Uint8Array(audioArrayBuffer);
+    console.log(`[PreRecorded] Fetched ${ulawData.length} bytes in ${Date.now() - startTime}ms`);
 
-    // Convert to base64
-    let binary = '';
-    for (let j = 0; j < audioBytes.length; j++) {
-      binary += String.fromCharCode(audioBytes[j]);
-    }
-    const audioBase64 = btoa(binary);
+    // EXACT MATCH TO FASTAPI: Send in 8000-byte chunks (1 second of 8kHz μ-law)
+    const CHUNK_SIZE = 8000;
+    const totalChunks = Math.floor(ulawData.length / CHUNK_SIZE);
 
-    // Send to Twilio immediately
-    const mediaMessage = {
-      event: 'media',
-      streamSid: session.streamSid,
-      media: {
-        payload: audioBase64
+    console.log(`[PreRecorded] Sending ${totalChunks} chunks of ${CHUNK_SIZE} bytes each`);
+
+    // Send chunks with minimal delay (FastAPI pattern)
+    for (let i = 0; i < totalChunks; i++) {
+      const startPos = i * CHUNK_SIZE;
+      const endPos = startPos + CHUNK_SIZE;
+      const chunk = ulawData.slice(startPos, endPos);
+
+      // Convert to base64 (JavaScript equivalent of Python's base64.b64encode().decode("ascii"))
+      let binary = '';
+      for (let j = 0; j < chunk.length; j++) {
+        binary += String.fromCharCode(chunk[j]);
       }
-    };
+      const payload = btoa(binary);
 
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify(mediaMessage));
-      console.log(`[PreRecorded] ✅ Sent intro audio (${audioBytes.length} bytes) in ${Date.now() - startTime}ms`);
+      // Send chunk to Twilio
+      const message = {
+        event: 'media',
+        streamSid: session.streamSid,
+        media: {
+          payload: payload
+        }
+      };
 
-      // Mark intro as played
-      session.sessionMemory.intro_played = true;
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(message));
+      }
+
+      // 10ms delay between chunks (FastAPI pattern)
+      await new Promise(resolve => setTimeout(resolve, 10));
+
+      if ((i + 1) % 100 === 0) {
+        console.log(`[PreRecorded] Sent ${i + 1}/${totalChunks} chunks...`);
+      }
     }
+
+    // Send remaining bytes (no padding needed for μ-law)
+    const remainingBytes = ulawData.length % CHUNK_SIZE;
+    if (remainingBytes > 0) {
+      const lastChunkStart = totalChunks * CHUNK_SIZE;
+      const lastChunk = ulawData.slice(lastChunkStart);
+
+      let binary = '';
+      for (let j = 0; j < lastChunk.length; j++) {
+        binary += String.fromCharCode(lastChunk[j]);
+      }
+      const payload = btoa(binary);
+
+      const message = {
+        event: 'media',
+        streamSid: session.streamSid,
+        media: {
+          payload: payload
+        }
+      };
+
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(message));
+      }
+    }
+
+    console.log(`[PreRecorded] ✅ Sent intro audio in ${totalChunks} chunks (${ulawData.length} bytes) in ${Date.now() - startTime}ms`);
+
+    // Mark intro as played
+    session.sessionMemory.intro_played = true;
   } catch (error) {
     console.error('[PreRecorded] Error playing audio:', error);
   }

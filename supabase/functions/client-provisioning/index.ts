@@ -507,6 +507,46 @@ Keep responses natural, concise, and helpful.`,
   return industryPrompts[normalized] || industryPrompts['default'];
 }
 
+// Standard ITU-T G.711 μ-law encoding (proven implementation)
+// Based on: https://github.com/rochars/alawmulaw
+const MULAW_BIAS = 33;
+const MULAW_MAX = 0x1FFF;
+
+function lin2mulaw(sample: number): number {
+  let sign, exponent, mantissa, ulawbyte;
+
+  // Get the sign and the magnitude
+  sign = (sample >> 8) & 0x80;
+  if (sign) sample = -sample;
+
+  // Convert to 14-bit range
+  sample = sample + MULAW_BIAS;
+  sample = Math.min(sample, MULAW_MAX);
+
+  // Find exponent
+  exponent = 7;
+  for (let expMask = 0x4000; (sample & expMask) === 0 && exponent > 0; exponent--, expMask >>= 1);
+
+  // Find mantissa
+  mantissa = (sample >> (exponent + 3)) & 0x0F;
+
+  // Combine
+  ulawbyte = ~(sign | (exponent << 4) | mantissa);
+
+  return ulawbyte & 0xFF;
+}
+
+function pcm16ToUlaw(pcmData: ArrayBuffer): Uint8Array {
+  const pcm16 = new Int16Array(pcmData);
+  const ulaw = new Uint8Array(pcm16.length);
+
+  for (let i = 0; i < pcm16.length; i++) {
+    ulaw[i] = lin2mulaw(pcm16[i]);
+  }
+
+  return ulaw;
+}
+
 // Helper: Generate intro audio using ElevenLabs streaming API
 async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8000' | 'mp3_44100'): Promise<ArrayBuffer | null> {
   const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
@@ -519,8 +559,10 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
   try {
     const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`;
 
-    // Determine content type based on format
-    const acceptHeader = format === 'ulaw_8000' ? 'audio/basic' : 'audio/mpeg';
+    // For μ-law, get PCM and convert ourselves (ElevenLabs ulaw_8000 returns MP3!)
+    // For MP3, get MP3 directly
+    const elevenLabsFormat = format === 'ulaw_8000' ? 'pcm_8000' : 'mp3_44100';
+    const acceptHeader = format === 'ulaw_8000' ? 'audio/pcm' : 'audio/mpeg';
 
     const response = await fetch(url, {
       method: 'POST',
@@ -532,7 +574,7 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
       body: JSON.stringify({
         text: text,
         model_id: 'eleven_turbo_v2_5',
-        output_format: format, // Dynamic: 'ulaw_8000' for phone, 'mp3_44100' for web
+        output_format: elevenLabsFormat,
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -542,12 +584,19 @@ async function generateIntroAudio(text: string, voiceId: string, format: 'ulaw_8
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`[ElevenLabs] Error response (${format}):`, response.status, errorText);
+      console.error(`[ElevenLabs] Error response (${elevenLabsFormat}):`, response.status, errorText);
       return null;
     }
 
     const audioBuffer = await response.arrayBuffer();
-    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${format} audio`);
+    console.log(`[ElevenLabs] Generated ${audioBuffer.byteLength} bytes of ${elevenLabsFormat} audio`);
+
+    // Convert PCM to μ-law if needed
+    if (format === 'ulaw_8000') {
+      const ulawData = pcm16ToUlaw(audioBuffer);
+      console.log(`[ElevenLabs] Converted to μ-law: ${ulawData.length} bytes`);
+      return ulawData.buffer;
+    }
 
     return audioBuffer;
 
