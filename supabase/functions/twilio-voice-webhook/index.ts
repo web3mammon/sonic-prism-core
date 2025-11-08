@@ -26,6 +26,8 @@ interface TwilioVoiceSession {
   currentSocket: WebSocket | null;
   // Keepalive timer for Supabase
   supabaseKeepaliveTimer: number | null;
+  // AssemblyAI audio buffer (REQUIRED: Twilio sends 20ms, AssemblyAI needs 50-1000ms)
+  assemblyaiBuffer: Uint8Array[];
 }
 
 const sessions = new Map<string, TwilioVoiceSession>();
@@ -288,6 +290,7 @@ async function handleTwilioMessage(callSid: string, message: any, socket: WebSoc
         isProcessing: false,
         currentSocket: socket,
         supabaseKeepaliveTimer: null,
+        assemblyaiBuffer: [], // REQUIRED: AssemblyAI needs 50ms minimum, Twilio sends 20ms
       };
 
       sessions.set(callSid, newSession);
@@ -410,12 +413,33 @@ async function handleTwilioAudio(callSid: string, audioPayloadBase64: string) {
   if (!session || !session.assemblyaiConnection) return;
 
   try {
-    // Decode μ-law audio from Twilio - MATCH chat-websocket pattern
+    // Decode μ-law audio from Twilio (20ms chunks = ~160 bytes at 8kHz)
     const audioData = Uint8Array.from(atob(audioPayloadBase64), c => c.charCodeAt(0));
 
-    // Send directly to AssemblyAI - NO BUFFERING (match chat-websocket)
-    if (session.assemblyaiConnection.readyState === WebSocket.OPEN) {
-      session.assemblyaiConnection.send(audioData);
+    // REQUIRED: AssemblyAI needs 50-1000ms chunks, Twilio sends 20ms
+    // Buffer to 60ms (3 chunks × 20ms) - faster than old 100ms
+    session.assemblyaiBuffer.push(audioData);
+
+    // Send when we have ≥50ms of audio (3 chunks × 20ms = 60ms)
+    if (session.assemblyaiBuffer.length >= 3) {
+      // Calculate total size
+      const totalSize = session.assemblyaiBuffer.reduce((sum, chunk) => sum + chunk.length, 0);
+
+      // Combine all buffered chunks
+      const combinedAudio = new Uint8Array(totalSize);
+      let offset = 0;
+      for (const chunk of session.assemblyaiBuffer) {
+        combinedAudio.set(chunk, offset);
+        offset += chunk.length;
+      }
+
+      // Send to AssemblyAI
+      if (session.assemblyaiConnection.readyState === WebSocket.OPEN) {
+        session.assemblyaiConnection.send(combinedAudio);
+      }
+
+      // Clear buffer
+      session.assemblyaiBuffer = [];
     }
   } catch (error) {
     console.error('[Twilio] Error processing audio:', error);
