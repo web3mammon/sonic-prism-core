@@ -179,6 +179,28 @@ export default function Dashboard() {
     loadVoiceProfile();
   }, [client?.voice_id]);
 
+  // Track payment success in Google Analytics
+  useEffect(() => {
+    if (!client?.client_id || !client?.paid_plan) return;
+
+    const storageKey = `payment_success_tracked_${client.client_id}`;
+    const alreadyTracked = localStorage.getItem(storageKey);
+
+    if (!alreadyTracked) {
+      // Fire GA event
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'payment_success', {
+          client_id: client.client_id,
+          plan_type: client.channel_type // phone/website/both
+        });
+        console.log('[GA] Payment success tracked for', client.client_id);
+      }
+
+      // Mark as tracked to prevent duplicate events
+      localStorage.setItem(storageKey, 'true');
+    }
+  }, [client?.client_id, client?.paid_plan, client?.channel_type]);
+
   // Get sentiment emoji
   const getSentimentDisplay = (score: number | null) => {
     if (score === null) return { icon: Meh, color: 'text-gray-400', label: 'N/A' };

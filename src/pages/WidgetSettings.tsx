@@ -152,7 +152,7 @@ export default function WidgetSettings() {
 
   const generateEmbedCode = (clientId: string, themeName: string) => {
     // Use CDN for better performance and branding
-    const widgetUrl = `https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}&theme=${themeName}`;
+    const widgetUrl = `https://cdn.klariqo.com/widgets/klariqo-widget-v2.js?client_id=${clientId}&theme=${themeName}`;
 
     return `<!-- Klariqo Voice AI Widget -->
 <script src="${widgetUrl}" defer></script>`;

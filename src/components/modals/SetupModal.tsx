@@ -53,18 +53,18 @@ export function SetupModal({
         if (error) {
           console.error('Error fetching widget config:', error);
           // Still provide fallback
-          setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+          setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget-v2.js?client_id=${clientId}"></script>`);
         } else if (data?.embed_code) {
           // Widget config exists - use it
           setWidgetCode(data.embed_code);
         } else {
           // No widget config exists (phone-only client) - use fallback
-          setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+          setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget-v2.js?client_id=${clientId}"></script>`);
         }
       } catch (error) {
         console.error('Unexpected error fetching widget code:', error);
         // Fallback to basic code
-        setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget.js?client_id=${clientId}"></script>`);
+        setWidgetCode(`<script src="https://cdn.klariqo.com/widgets/klariqo-widget-v2.js?client_id=${clientId}"></script>`);
       } finally {
         setLoadingWidget(false);
       }

@@ -1,5 +1,5 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// xhr deprecated - removed
+// serve replaced with Deno.serve
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildVoiceOptimizedPrompt, normalizeForTTS } from "../_shared/voice-utils.ts";
 
@@ -22,6 +22,7 @@ interface VoiceSession {
   conversationHistory: Array<{ role: string; content: string }>;
   assemblyaiConnection: WebSocket | null;
   isProcessing: boolean;
+  keepaliveInterval: number | null;
 }
 
 // Convert PCM to WAV by adding WAV header (same as marketing-edge-function)
@@ -69,7 +70,7 @@ function pcmToWav(pcmData: Uint8Array, sampleRate: number, numChannels: number =
 
 const sessions = new Map<string, VoiceSession>();
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -125,9 +126,18 @@ serve(async (req) => {
       conversationHistory: [],
       assemblyaiConnection: null,
       isProcessing: false,
+      keepaliveInterval: null,
     };
 
     sessions.set(sessionId, session);
+
+    // Set up keepalive ping every 30 seconds to prevent idle timeout
+    session.keepaliveInterval = setInterval(() => {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: 'ping' }));
+        console.log('[Keepalive] Ping sent');
+      }
+    }, 30000);
 
     // Initialize AssemblyAI connection FIRST (critical path)
     const assemblyaiReady = await initializeAssemblyAI(sessionId, socket);
@@ -213,6 +223,11 @@ serve(async (req) => {
       const data = JSON.parse(event.data);
 
       switch (data.type) {
+        // Keepalive pong response
+        case 'pong':
+          console.log('[Keepalive] Pong received from client');
+          break;
+
         // NLC format
         case 'audio.chunk':
           await handleAudioChunk(sessionId, data.audio, socket);
@@ -284,6 +299,13 @@ serve(async (req) => {
     if (session?.assemblyaiConnection) {
       session.assemblyaiConnection.close();
     }
+
+    // Clear keepalive interval
+    if (session?.keepaliveInterval) {
+      clearInterval(session.keepaliveInterval);
+      console.log('[Keepalive] Interval cleared');
+    }
+
     sessions.delete(sessionId);
   };
 
@@ -311,7 +333,7 @@ async function initializeAssemblyAI(sessionId: string, clientSocket: WebSocket):
       end_of_turn_confidence_threshold: '0.7',
       min_end_of_turn_silence_when_confident: '160',
       max_turn_silence: '1000',
-      inactivity_timeout: '120', // 2 minutes of inactivity before session closes
+      inactivity_timeout: '900', // 15 minutes of inactivity before session closes
       token: ASSEMBLYAI_API_KEY
     });
 
@@ -381,7 +403,7 @@ async function initializeAssemblyAI(sessionId: string, clientSocket: WebSocket):
     };
 
     assemblyaiWs.onclose = (event) => {
-      console.log(`[AssemblyAI] Connection closed: code=${event.code}`);
+      console.log(`[AssemblyAI] Connection closed: code=${event.code}, reason="${event.reason}", wasClean=${event.wasClean}`);
     };
 
     return await connectionPromise;
@@ -519,6 +541,12 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
                     if (sentenceChunk) {
                       console.log(`[GPT-Stream] Sentence: "${sentenceChunk}"`);
 
+                      // Check socket state before sending
+                      if (socket.readyState !== WebSocket.OPEN) {
+                        console.log('[GPT-Stream] Socket closed, aborting stream');
+                        return;
+                      }
+
                       socket.send(JSON.stringify({
                         type: 'text.chunk',
                         text: sentenceChunk
@@ -542,6 +570,13 @@ async function processWithGPT(sessionId: string, userInput: string, socket: WebS
     // Send any remaining text
     if (textBuffer.trim()) {
       console.log(`[GPT-Stream] Final chunk: "${textBuffer}"`);
+
+      // Check socket state before sending
+      if (socket.readyState !== WebSocket.OPEN) {
+        console.log('[GPT-Stream] Socket closed, aborting final chunk');
+        return;
+      }
+
       socket.send(JSON.stringify({
         type: 'text.chunk',
         text: textBuffer.trim()
@@ -613,7 +648,7 @@ async function generateSpeechChunk(sessionId: string, text: string, socket: WebS
     console.log(`[ElevenLabs-Chunk #${chunkIndex}] Generating TTS for: "${speechText.substring(0, 50)}..."`);
 
     const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_22050`,
+      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=pcm_16000`,
       {
         method: 'POST',
         headers: {
@@ -623,7 +658,7 @@ async function generateSpeechChunk(sessionId: string, text: string, socket: WebS
         },
         body: JSON.stringify({
           text: speechText,
-          model_id: 'eleven_turbo_v2_5',
+          model_id: 'eleven_flash_v2_5',
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.75,
@@ -643,7 +678,7 @@ async function generateSpeechChunk(sessionId: string, text: string, socket: WebS
     const pcmData = new Uint8Array(audioArrayBuffer);
 
     // Convert PCM to WAV (add WAV header so browsers can play it)
-    const wavData = pcmToWav(pcmData, 22050, 1, 16);
+    const wavData = pcmToWav(pcmData, 16000, 1, 16);
 
     // Convert to base64
     let binary = '';

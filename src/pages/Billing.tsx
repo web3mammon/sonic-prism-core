@@ -130,6 +130,14 @@ export default function Billing() {
 
       console.log('[Billing] Redirecting to checkout:', data.checkout_url);
 
+      // Track upgrade click in Google Analytics
+      if (typeof window !== 'undefined' && (window as any).gtag) {
+        (window as any).gtag('event', 'upgrade_clicked', {
+          plan_type: targetPlanId.includes('yearly') ? 'yearly' : 'monthly',
+          plan_name: targetPlanId
+        });
+      }
+
       // Redirect to DodoPayments hosted checkout
       window.location.href = data.checkout_url;
 
